@@ -46,17 +46,25 @@
     if (next < 0) { showCashAlert('Not enough cash balance.'); return current; }
     setCash(next);
     const ledger = readLedger();
+    const resolvedType = String(meta.type || (change >= 0 ? 'credit' : 'debit'));
+    const resolvedCategory = String(meta.entryCategory || 'transaction');
+    const resolvedNote = String(meta.note || '').trim() || defaultNote({
+      type: resolvedType,
+      kind: String(meta.kind || 'system'),
+      entryCategory: resolvedCategory,
+      change,
+    });
     ledger.push({
       id:            crypto.randomUUID(),
       createdAt:     new Date().toISOString(),
       delta:         change,
-      note:          String(meta.note || ''),
-      type:          String(meta.type || (change >= 0 ? 'credit' : 'debit')),
+      note:          resolvedNote,
+      type:          resolvedType,
       kind:          String(meta.kind || 'system'),
-      entryCategory: String(meta.entryCategory || 'transaction'),
+      entryCategory: resolvedCategory,
       baseAmount:    Math.round(Number(meta.baseAmount || Math.abs(change))),
       charges:       Number(meta.charges || 0),
-      editable:      Boolean(meta.editable),
+      editable:      meta.editable === undefined ? true : Boolean(meta.editable),
     });
     saveLedger(ledger);
     return next;
@@ -183,6 +191,15 @@
 
   function escHtml(v) {
     return String(v || '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
+  }
+
+  function defaultNote({ type, kind, entryCategory, change }) {
+    if (entryCategory === 'profit') return 'Profit cashed out';
+    if (entryCategory === 'profit_fee') return 'Profit cashout fee';
+    if (type === 'position_edit') return 'Position updated';
+    if (kind === 'system' && change < 0) return 'Auto cash deduction';
+    if (kind === 'system' && change > 0) return 'Auto cash credit';
+    return change >= 0 ? 'Cash in entry' : 'Cash out entry';
   }
 
   window.PmsCapital = {
