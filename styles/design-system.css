@@ -251,6 +251,15 @@ body {
 }
 .topbar-cash-pill:hover { border-color: var(--accent); color: var(--accent); }
 .topbar-cash-pill strong { color: var(--text-primary); }
+.sidebar-toggle-btn {
+  display: none;
+  border: 1px solid var(--border-bright);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+  cursor: pointer;
+}
 
 /* ── View Container ──────────────────────────────────────── */
 #pms-view {
@@ -330,11 +339,14 @@ body {
 }
 .stat-value {
   font-family: var(--font-mono);
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
   line-height: 1.1;
 }
+.stat-card .stat-value { color: var(--text-primary) !important; }
+.stat-card.profit-card:hover .stat-value { color: var(--profit) !important; }
+.stat-card.loss-card:hover .stat-value { color: var(--loss) !important; }
 .stat-sub {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -759,13 +771,30 @@ body {
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 960px) {
-  #pms-sidebar { width: 52px; }
-  .sidebar-brand-name, .sidebar-brand-sub, .nav-item span, .nav-section-label,
-  .sidebar-cash-label, .sidebar-cash-value { display: none; }
-  .nav-item { justify-content: center; padding: 10px; }
-  .nav-item-icon { width: auto; font-size: 16px; }
-  .sidebar-market { justify-content: center; padding: var(--space-sm); }
-  .sidebar-market span:not(.market-dot) { display: none; }
+  .sidebar-toggle-btn { display: inline-flex; }
+  #pms-sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    transform: translateX(-100%);
+    transition: transform var(--t-std);
+    width: min(280px, 82vw);
+  }
+  #pms-app.sidebar-open #pms-sidebar { transform: translateX(0); }
+  .pms-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--t-std);
+    z-index: 9;
+  }
+  #pms-app.sidebar-open ~ .pms-sidebar-overlay {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 @media (max-width: 640px) {
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
@@ -798,3 +827,8 @@ body {
   accent-color: var(--accent);
   cursor: pointer;
 }
+
+.risk-kpis-line { grid-template-columns: repeat(5, minmax(120px, 1fr)); }
+.risk-kpis-line .stat-card { padding: 10px 12px; }
+.risk-kpis-line .stat-label,
+.risk-kpis-line .stat-value { white-space: nowrap; }

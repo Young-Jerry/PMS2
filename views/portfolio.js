@@ -4,11 +4,12 @@
  * All WACC, P/L, cost logic preserved exactly from original portfolio.js
  */
 const PortfolioView = (() => {
-  let activeTab = 'trades';   // 'trades' | 'longterm'
+  let activeTab = 'trades';   // 'trades' | 'longterm' | 'sip'
 
   const CONFIGS = {
     trades:   { key: 'trades',   title: 'Active Trades',  showRanges: true,  showInvested: true  },
     longterm: { key: 'longterm', title: 'Long-Term Hold',  showRanges: false, showInvested: true  },
+    sip:      { key: 'sip',      title: 'SIP System',      showRanges: false, showInvested: false },
   };
 
   let sortKey = 'script', sortDir = 1;
@@ -28,6 +29,7 @@ const PortfolioView = (() => {
             <div class="pms-tabs">
               <button class="pms-tab active" data-tab="trades">Active Trades</button>
               <button class="pms-tab" data-tab="longterm">Long Term</button>
+              <button class="pms-tab" data-tab="sip">SIP System</button>
             </div>
           </div>
         </div>
@@ -120,6 +122,17 @@ const PortfolioView = (() => {
 
   function renderTab(container) {
     const cfg = CONFIGS[activeTab];
+    const addCard = container.querySelector('#port-add-card');
+    const tableSection = container.querySelector('#port-table-section');
+    if (activeTab === 'sip') {
+      if (addCard) addCard.style.display = 'none';
+      if (tableSection) tableSection.style.display = 'none';
+      renderSipTab(container);
+      return;
+    }
+    if (addCard) addCard.style.display = '';
+    if (tableSection) tableSection.style.display = '';
+    container.querySelector('#sip-tab-root')?.remove();
     // Update form label
     container.querySelector('#port-form-title').textContent = `Add to ${cfg.title}`;
     // Show/hide sell target field
@@ -233,7 +246,7 @@ const PortfolioView = (() => {
     ].map(([l,v,c]) => `
       <div style="flex:1;padding:12px 20px;border-right:1px solid var(--border);">
         <div class="stat-label">${l}</div>
-        <div class="stat-value" style="font-size:16px;" class="${c}">${v}</div>
+        <div class="stat-value ${c}" style="font-size:14px;">${v}</div>
       </div>
     `).join('');
   }
@@ -446,6 +459,191 @@ const PortfolioView = (() => {
       close();
       renderTab(container);
     };
+  }
+
+  function renderSipTab(container) {
+    const root = document.createElement('div');
+    root.id = 'sip-tab-root';
+    root.className = 'section-gap';
+    root.innerHTML = `
+      <div class="pms-card">
+        <div class="pms-card-body">
+          <div class="stat-grid">
+            <div class="stat-card"><div class="stat-label">Total Units</div><div class="stat-value" id="sipTotalUnits">0</div></div>
+            <div class="stat-card"><div class="stat-label">Current NAV</div><div class="stat-value" id="sipCurrentNav">Rs 0</div></div>
+            <div class="stat-card"><div class="stat-label">Total Value</div><div class="stat-value" id="sipTotalValue">Rs 0</div></div>
+          </div>
+          <div style="margin-top:12px;" class="pms-tabs" id="sipTabs"></div>
+        </div>
+      </div>
+      <div class="grid-2 section-gap">
+        <div class="pms-card"><div class="pms-card-header"><span class="pms-card-title">Update NAV</span></div><div class="pms-card-body">
+          <form id="sip-nav-form" class="pms-form-grid"><div class="pms-field"><label class="pms-label">SIP</label><select class="pms-select" name="sipName" required></select></div><div class="pms-field"><label class="pms-label">New NAV</label><input class="pms-input" name="nav" type="number" min="0.01" step="0.0001" required></div><button class="pms-btn pms-btn-ghost" type="submit">Update NAV</button></form>
+        </div></div>
+        <div class="pms-card"><div class="pms-card-header"><span class="pms-card-title">Manage SIPs</span></div><div class="pms-card-body">
+          <form id="sip-manual-form" class="pms-form-grid"><div class="pms-field"><label class="pms-label">New SIP Name</label><input class="pms-input" name="newSipName" type="text" placeholder="e.g. NABIL" required></div><button class="pms-btn pms-btn-primary" type="submit">Add SIP</button><button class="pms-btn pms-btn-danger" type="button" id="sip-del-btn">Remove Active SIP</button></form>
+        </div></div>
+      </div>
+      <div class="pms-card section-gap"><div class="pms-card-header"><span class="pms-card-title">Add Installment</span></div><div class="pms-card-body">
+        <form id="sip-installment-form" class="pms-form-grid"><div class="pms-field"><label class="pms-label">SIP</label><select class="pms-select" name="sipName" required></select></div><div class="pms-field"><label class="pms-label">Date</label><input class="pms-input" name="date" type="date" required></div><div class="pms-field"><label class="pms-label">Units</label><input class="pms-input" name="units" type="number" min="1" step="1" required></div><div class="pms-field"><label class="pms-label">NAV</label><input class="pms-input" name="nav" type="number" min="0.01" step="0.0001" required></div><button class="pms-btn pms-btn-primary" type="submit">Add Installment</button></form>
+      </div></div>
+      <div class="table-section section-gap"><div class="filter-bar"><strong>SIP History</strong><select class="pms-select" id="sip-history" style="max-width:180px;"></select></div><div class="pms-table-wrap"><table class="pms-table"><thead id="sip-thead"></thead><tbody id="sip-tbody"></tbody></table></div></div>
+      <div class="pms-card section-gap"><div class="pms-card-header"><span class="pms-card-title">Allocation Breakdown</span></div><div class="pms-card-body" id="sip-allocation"></div></div>
+    `;
+    container.querySelector('.view-enter').appendChild(root);
+    bindSipEvents(root);
+  }
+
+  function bindSipEvents(root) {
+    const state = sipReadState();
+    let activeSip = state.activeSip && (state.activeSip === 'ALL_SIP' || state.sips.includes(state.activeSip)) ? state.activeSip : 'ALL_SIP';
+    let historySip = 'ALL';
+    const tabs = root.querySelector('#sipTabs');
+    const navForm = root.querySelector('#sip-nav-form');
+    const addForm = root.querySelector('#sip-installment-form');
+    const manualForm = root.querySelector('#sip-manual-form');
+    const history = root.querySelector('#sip-history');
+
+    const rerender = () => {
+      const st = sipReadState();
+      tabs.innerHTML = '';
+      [['ALL_SIP', 'All SIP'], ...st.sips.map(s => [s, s])].forEach(([v, l]) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = `pms-tab ${activeSip === v ? 'active' : ''}`; b.textContent = l;
+        b.onclick = () => { activeSip = v; st.activeSip = v; PmsState.persistSip(st); rerender(); };
+        tabs.appendChild(b);
+      });
+      [navForm, addForm].forEach(form => {
+        const select = form.elements.sipName;
+        select.innerHTML = st.sips.map(s => `<option value="${s}">${s}</option>`).join('');
+        select.value = activeSip === 'ALL_SIP' ? (st.sips[0] || '') : activeSip;
+      });
+      history.innerHTML = `<option value="ALL">All SIPs</option>${st.sips.map(s => `<option value="${s}">${s}</option>`).join('')}`;
+      history.value = historySip;
+      renderSipStats(root, st, activeSip);
+      renderSipHistory(root, st, historySip);
+      renderSipAllocation(root, st);
+    };
+
+    manualForm.onsubmit = (e) => {
+      e.preventDefault();
+      const st = sipReadState();
+      const name = String(manualForm.elements.newSipName.value || '').trim().toUpperCase();
+      if (!name || st.sips.includes(name)) return;
+      st.sips.push(name); st.records[name] = []; st.currentNav[name] = 0; st.registeredAt[name] = new Date().toISOString().slice(0,10); activeSip = name;
+      PmsState.persistSip(st); manualForm.reset(); rerender();
+    };
+    root.querySelector('#sip-del-btn').onclick = () => {
+      const st = sipReadState();
+      if (!activeSip || activeSip === 'ALL_SIP' || ['SSIS','KSLY'].includes(activeSip)) return;
+      const refund = (st.records[activeSip] || []).reduce((s, r) => s + Number(r.amount || 0), 0);
+      if (refund) PmsCapital.adjustCash(refund);
+      st.sips = st.sips.filter(s => s !== activeSip); delete st.records[activeSip]; delete st.currentNav[activeSip]; delete st.registeredAt[activeSip];
+      activeSip = 'ALL_SIP'; historySip = 'ALL'; PmsState.persistSip(st); rerender();
+    };
+    navForm.onsubmit = (e) => {
+      e.preventDefault();
+      const st = sipReadState(); const nav = Number(navForm.elements.nav.value); const sip = navForm.elements.sipName.value;
+      if (!Number.isFinite(nav) || nav <= 0) return;
+      st.currentNav[sip] = nav; PmsState.persistSip(st); rerender();
+    };
+    addForm.onsubmit = (e) => {
+      e.preventDefault();
+      const st = sipReadState();
+      const sip = addForm.elements.sipName.value;
+      const date = String(addForm.elements.date.value || '');
+      const units = Math.floor(Number(addForm.elements.units.value));
+      const nav = Number(addForm.elements.nav.value);
+      if (!sip || !/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(units) || units <= 0 || !Number.isFinite(nav) || nav <= 0) return;
+      st.records[sip] = st.records[sip] || [];
+      if (st.records[sip].some(r => String(r.date).slice(0,7) === date.slice(0,7))) return;
+      const amount = units * nav;
+      st.records[sip].push({ id: crypto.randomUUID(), date, units, nav, amount });
+      st.records[sip].sort((a,b) => a.date.localeCompare(b.date));
+      st.currentNav[sip] = nav; activeSip = sip; PmsCapital.adjustCash(-amount); PmsState.persistSip(st); addForm.reset(); rerender();
+    };
+    history.onchange = () => { historySip = history.value; rerender(); };
+    rerender();
+  }
+
+  function renderSipStats(root, state, activeSip) {
+    const names = activeSip === 'ALL_SIP' ? state.sips : [activeSip];
+    const totalUnits = names.reduce((sum, sip) => sum + (state.records[sip] || []).reduce((s, row) => s + Number(row.units || 0), 0), 0);
+    const totalValue = names.reduce((sum, sip) => {
+      const units = (state.records[sip] || []).reduce((s, r) => s + Number(r.units || 0), 0);
+      const nav = Number(state.currentNav[sip] || (state.records[sip] || []).slice(-1)[0]?.nav || 0);
+      return sum + units * nav;
+    }, 0);
+    root.querySelector('#sipTotalUnits').textContent = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(totalUnits);
+    root.querySelector('#sipTotalValue').textContent = PmsUI.currency(totalValue);
+    const navEl = root.querySelector('#sipCurrentNav');
+    navEl.textContent = activeSip === 'ALL_SIP' ? '—' : PmsUI.currency(state.currentNav[activeSip] || 0);
+  }
+
+  function renderSipHistory(root, state, historySip) {
+    const thead = root.querySelector('#sip-thead');
+    const tbody = root.querySelector('#sip-tbody');
+    if (historySip === 'ALL') {
+      thead.innerHTML = '<tr><th>SIP</th><th>Units</th><th>Avg</th><th>Invested Amt</th><th>Total Current Value</th></tr>';
+      const rows = state.sips.map((sip) => {
+        const units = (state.records[sip] || []).reduce((s, r) => s + Number(r.units || 0), 0);
+        const amount = (state.records[sip] || []).reduce((s, r) => s + Number(r.amount || 0), 0);
+        const nav = Number(state.currentNav[sip] || 0);
+        return { sip, units, amount, value: units * nav, avg: units ? amount / units : 0 };
+      }).filter(r => r.units > 0);
+      tbody.innerHTML = rows.length ? rows.map(r => `<tr><td>${r.sip}</td><td>${r.units}</td><td>${PmsUI.fmt2(r.avg)}</td><td>${PmsUI.currency(r.amount)}</td><td>${PmsUI.currency(r.value)}</td></tr>`).join('') : '<tr><td colspan="5" style="padding:18px;">No SIP history found for this selection.</td></tr>';
+      return;
+    }
+    thead.innerHTML = '<tr><th>Date</th><th>SIP</th><th>Units</th><th>Avg</th><th>Invested Amt</th><th>Total Current Value</th><th>Actions</th></tr>';
+    const rows = (state.records[historySip] || []).map(r => ({ ...r, sip: historySip, currentValue: Number(r.units || 0) * Number(state.currentNav[historySip] || r.nav || 0) }));
+    tbody.innerHTML = rows.length ? rows.map(r => `<tr><td>${r.date}</td><td>${r.sip}</td><td>${r.units}</td><td>${PmsUI.fmt2(r.nav)}</td><td>${PmsUI.currency(r.amount)}</td><td>${PmsUI.currency(r.currentValue)}</td><td><button class="pms-btn pms-btn-icon pms-btn-danger" data-sip-del="${r.id}">✕</button></td></tr>`).join('') : '<tr><td colspan="7" style="padding:18px;">No SIP history found for this selection.</td></tr>';
+    tbody.querySelectorAll('[data-sip-del]').forEach((btn) => btn.onclick = () => {
+      const st = sipReadState();
+      const removed = (st.records[historySip] || []).find((row) => row.id === btn.dataset.sipDel);
+      st.records[historySip] = (st.records[historySip] || []).filter((row) => row.id !== btn.dataset.sipDel);
+      if (removed) PmsCapital.adjustCash(Number(removed.amount || 0));
+      if (!st.records[historySip].length) st.currentNav[historySip] = 0;
+      PmsState.persistSip(st);
+      renderSipHistory(root, st, historySip);
+      renderSipStats(root, st, historySip);
+      renderSipAllocation(root, st);
+    });
+  }
+
+  function renderSipAllocation(root, state) {
+    const host = root.querySelector('#sip-allocation');
+    const total = state.sips.reduce((s, sip) => {
+      const units = (state.records[sip] || []).reduce((a, r) => a + Number(r.units || 0), 0);
+      return s + (units * Number(state.currentNav[sip] || 0));
+    }, 0);
+    host.innerHTML = state.sips.map((sip) => {
+      const units = (state.records[sip] || []).reduce((a, r) => a + Number(r.units || 0), 0);
+      const value = units * Number(state.currentNav[sip] || 0);
+      const pct = total > 0 ? (value / total) * 100 : 0;
+      return `<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;"><span>${sip}</span><span>${PmsUI.currency(value)} (${pct.toFixed(1)}%)</span></div><div class="alloc-bar-track"><div class="alloc-bar-fill" style="width:${pct.toFixed(1)}%;"></div></div></div>`;
+    }).join('') || '<span class="val-muted">No SIP allocation data yet.</span>';
+  }
+
+  function sipReadState() {
+    const forced = { SSIS: '2025-07-15', KSLY: '2026-02-15' };
+    const input = PmsState.readSip();
+    const sips = Array.from(new Set([...(input.sips || []), 'SSIS', 'KSLY']));
+    const records = {};
+    const currentNav = { ...(input.currentNav || {}) };
+    const registeredAt = { ...(input.registeredAt || {}) };
+    sips.forEach((sip) => {
+      records[sip] = Array.isArray((input.records || {})[sip]) ? input.records[sip].map(r => ({
+        id: r.id || crypto.randomUUID(),
+        date: String(r.date || forced[sip] || new Date().toISOString().slice(0,10)),
+        units: Math.floor(Number(r.units || 0)),
+        nav: Number(r.nav || 0),
+        amount: Number(r.amount || (Number(r.units || 0) * Number(r.nav || 0))),
+      })) : [];
+      records[sip].sort((a,b) => a.date.localeCompare(b.date));
+      if (!registeredAt[sip]) registeredAt[sip] = forced[sip] || records[sip][0]?.date || new Date().toISOString().slice(0,10);
+      if (!Number.isFinite(currentNav[sip])) currentNav[sip] = records[sip].slice(-1)[0]?.nav || 0;
+    });
+    return { sips, records, currentNav, registeredAt, activeSip: input.activeSip || 'ALL_SIP' };
   }
 
   // ── Helpers ───────────────────────────────────────────────

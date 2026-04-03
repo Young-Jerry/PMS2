@@ -26,6 +26,7 @@
   function boot() {
     buildSidebar();
     buildTopbar();
+    ensureSidebarOverlay();
 
     // Subscribe to state changes
     PmsState.subscribe(({ view }) => {
@@ -43,6 +44,17 @@
     navigateTo(VIEWS[initial] ? initial : 'dashboard');
   }
 
+  function ensureSidebarOverlay() {
+    if (document.getElementById('pms-sidebar-overlay')) return;
+    const overlay = document.createElement('div');
+    overlay.id = 'pms-sidebar-overlay';
+    overlay.className = 'pms-sidebar-overlay';
+    overlay.addEventListener('click', () => {
+      document.getElementById('pms-app')?.classList.remove('sidebar-open');
+    });
+    document.body.appendChild(overlay);
+  }
+
   function buildSidebar() {
     const sidebar = document.getElementById('pms-sidebar');
     sidebar.innerHTML = `
@@ -50,15 +62,7 @@
         <div class="sidebar-brand-name">NEPSE Terminal</div>
         <div class="sidebar-brand-sub">Portfolio Management System</div>
       </div>
-      <div class="sidebar-market" id="sidebar-market">
-        <span class="market-dot dot-red"></span>
-        <span id="sidebar-market-text">NEPSE --:--:--</span>
-      </div>
       <nav class="sidebar-nav" id="sidebar-nav"></nav>
-      <div class="sidebar-cash">
-        <div class="sidebar-cash-label">Cash Balance</div>
-        <div class="sidebar-cash-value" data-cash-display>Rs 0</div>
-      </div>
     `;
 
     const nav = sidebar.querySelector('#sidebar-nav');
@@ -77,12 +81,12 @@
       nav.appendChild(sectionEl);
     });
 
-    PmsUI.startMarketTimer('sidebar-market-text');
   }
 
   function buildTopbar() {
     const topbar = document.getElementById('pms-topbar');
     topbar.innerHTML = `
+      <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" type="button" aria-label="Toggle menu">☰</button>
       <span class="topbar-title" id="topbar-view-title">Dashboard</span>
       <div class="topbar-right">
         <div class="topbar-cash-pill" onclick="PmsState.setView('cashflow')" title="Go to Cashflow">
@@ -95,12 +99,19 @@
       </div>
     `;
     PmsUI.startMarketTimer('topbar-market-text');
+    topbar.querySelector('#sidebar-toggle-btn')?.addEventListener('click', toggleSidebar);
+  }
+
+  function toggleSidebar() {
+    const app = document.getElementById('pms-app');
+    app?.classList.toggle('sidebar-open');
   }
 
   function navigateTo(viewId) {
     if (!VIEWS[viewId]) return;
     currentViewId = viewId;
     location.hash = viewId;
+    document.getElementById('pms-app')?.classList.remove('sidebar-open');
 
     // Update topbar title
     const titleEl = document.getElementById('topbar-view-title');
