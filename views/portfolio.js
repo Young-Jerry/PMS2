@@ -260,12 +260,27 @@ const PortfolioView = (() => {
     if (type === 'number') { input.min = '0'; input.step = field === 'qty' ? '1' : '0.01'; }
 
     const applyEdit = () => {
+      const rawValue = String(input.value ?? '');
+      const dedupeKey = `${field}:${rawValue}`;
+      if (input.dataset.lastApplied === dedupeKey) return;
+      input.dataset.lastApplied = dedupeKey;
+
       let newVal = type === 'number'
         ? (field === 'qty' ? Math.floor(PmsUI.num(input.value)) : PmsUI.num(input.value))
         : input.value.trim().toUpperCase();
-      if (type === 'number' && !Number.isFinite(newVal)) return;
-      if (type === 'number' && newVal < 0) return;
-      if (field === 'qty' && newVal <= 0) return;
+      if (type === 'number' && !Number.isFinite(newVal)) {
+        input.value = type === 'number' ? (field === 'qty' ? Math.floor(row[field]) : PmsUI.fmt2(row[field])) : row[field];
+        return;
+      }
+      if (type === 'number' && newVal < 0) {
+        input.value = type === 'number' ? (field === 'qty' ? Math.floor(row[field]) : PmsUI.fmt2(row[field])) : row[field];
+        return;
+      }
+      if (field === 'qty' && newVal <= 0) {
+        input.value = Math.floor(row[field]);
+        return;
+      }
+      if (newVal === row[field]) return;
 
       const previousCost = investedCost(row.wacc, row.qty);
       const previousValue = row[field];

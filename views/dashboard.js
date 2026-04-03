@@ -214,51 +214,74 @@ const DashboardView = (() => {
 
     let cumulativeRealized = 0;
     let cumulativeBooked = 0;
-    const points = [{ x: 0, y: 0, meta: 'Start' }];
+    const profitPoints = [{ x: 0, y: 0, meta: 'Start' }];
+    const bookedPoints = [{ x: 0, y: 0, meta: 'Start' }];
     events.forEach((ev, idx) => {
       cumulativeRealized += ev.realized;
       cumulativeBooked += ev.booked;
-      points.push({
+      profitPoints.push({
         x: idx + 1,
-        y: PmsUI.round2(cumulativeRealized - cumulativeBooked),
+        y: PmsUI.round2(cumulativeRealized),
+        meta: ev.label,
+      });
+      bookedPoints.push({
+        x: idx + 1,
+        y: PmsUI.round2(cumulativeBooked),
         meta: ev.label,
       });
     });
-    const labels = points.map((_, idx) => idx);
+    const labels = profitPoints.map((_, idx) => idx);
 
     profitChart = new Chart(canvas, {
       type: 'line',
       data: {
         labels,
-        datasets: [{
-          label: 'Net Profit (Realized − Booked)',
-          data: points.map(p => p.y),
-          borderColor: '#3b82f6',
-          borderWidth: 2.5,
-          fill: true,
-          backgroundColor: (ctx) => {
-            const chart = ctx.chart;
-            const { ctx: c, chartArea } = chart;
-            if (!chartArea) return 'rgba(59,130,246,0.12)';
-            const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-            gradient.addColorStop(0, 'rgba(59,130,246,0.28)');
-            gradient.addColorStop(1, 'rgba(59,130,246,0.03)');
-            return gradient;
+        datasets: [
+          {
+            label: 'Profit',
+            data: profitPoints.map(p => p.y),
+            borderColor: '#3b82f6',
+            borderWidth: 2.5,
+            fill: true,
+            backgroundColor: (ctx) => {
+              const chart = ctx.chart;
+              const { ctx: c, chartArea } = chart;
+              if (!chartArea) return 'rgba(59,130,246,0.12)';
+              const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+              gradient.addColorStop(0, 'rgba(59,130,246,0.28)');
+              gradient.addColorStop(1, 'rgba(59,130,246,0.03)');
+              return gradient;
+            },
+            tension: 0.35,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: '#60a5fa',
           },
-          tension: 0.35,
-          pointRadius: 0,
-          pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#60a5fa',
-        }],
+          {
+            label: 'Profit Booked',
+            data: bookedPoints.map(p => p.y),
+            borderColor: '#f59e0b',
+            borderWidth: 2.25,
+            fill: false,
+            tension: 0.35,
+            pointRadius: 0,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: '#fbbf24',
+          },
+        ],
       },
       options: {
         animation: false, responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'nearest', intersect: false },
         plugins: {
-          legend: { display: false },
+          legend: {
+            display: true,
+            position: 'top',
+            labels: { color: '#9ba6bf', boxWidth: 16, usePointStyle: true, pointStyle: 'line' },
+          },
           tooltip: {
             callbacks: {
-              title: (items) => points[items?.[0]?.dataIndex || 0]?.meta || 'Profit',
+              title: (items) => profitPoints[items?.[0]?.dataIndex || 0]?.meta || 'Profit',
               label: (ctx) => `${ctx.dataset.label}: ${PmsUI.currency(ctx.parsed.y)}`,
             },
           },
