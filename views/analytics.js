@@ -61,10 +61,6 @@ const AnalyticsView = (() => {
             </div>
           </div>
           <div class="pms-card-body" style="padding:12px 16px;">
-            <div id="analytics-no-data" class="empty-state" hidden>
-              <div class="empty-state-icon">📊</div>
-              <div class="empty-state-text">No exited trades yet. Complete some trades to see analytics.</div>
-            </div>
             <div class="chart-wrap" style="height:280px;">
               <canvas id="analytics-main-chart"></canvas>
             </div>
@@ -143,16 +139,11 @@ const AnalyticsView = (() => {
     const wins    = exited.filter(r => r.profit > 0).length;
     const losses  = exited.filter(r => r.profit < 0).length;
     const winRate = exited.length > 0 ? (wins / exited.length * 100) : 0;
-    const avgProfit = exited.length > 0 ? totals.profit / exited.length : 0;
-    const maxDD    = computeMaxDrawdown(exited.map(r => r.profit));
-
     const kpis = [
       { l: 'Total Invested',  v: PmsUI.currency(totals.invested), c: '' },
       { l: 'Total Profit',    v: PmsUI.currency(totals.profit),   c: totals.profit >= 0 ? 'profit-card' : 'loss-card' },
       { l: 'Portfolio ROI',   v: PmsUI.pct(roi),                  c: roi >= 0 ? 'profit-card' : 'loss-card' },
       { l: 'Win Rate',        v: `${winRate.toFixed(1)}%`,         c: winRate >= 50 ? 'profit-card' : 'loss-card' },
-      { l: 'Avg Trade P&L',   v: PmsUI.currency(avgProfit),        c: avgProfit >= 0 ? 'profit-card' : 'loss-card' },
-      { l: 'Max Drawdown',    v: PmsUI.currency(maxDD),             c: 'loss-card' },
       { l: 'Total Trades',    v: String(exited.length),            c: '' },
       { l: 'Win / Loss',      v: `${wins} / ${losses}`,             c: '' },
     ];
@@ -168,13 +159,7 @@ const AnalyticsView = (() => {
   function renderMainChart(container, exited) {
     if (mainChart) { mainChart.destroy(); mainChart = null; }
     const canvas    = container.querySelector('#analytics-main-chart');
-    const noData    = container.querySelector('#analytics-no-data');
-
-    if (!exited.length) {
-      if (noData) noData.hidden = false;
-      return;
-    }
-    if (noData) noData.hidden = true;
+    if (!exited.length) return;
     if (!window.Chart || !canvas) return;
 
     const profits   = [0, ...exited.map(r => PmsUI.round2(r.profit))];
