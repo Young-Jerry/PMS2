@@ -11,13 +11,14 @@
     analytics:  { label: 'Analytics',          icon: '◈', render: (c) => AnalyticsView.render(c)  },
     risk:       { label: 'Risk Analysis',      icon: '◬', render: (c) => RiskView.render(c)       },
     cashflow:   { label: 'Cashflow',           icon: '⬡', render: (c) => CashflowView.render(c)   },
+    calculator: { label: 'Trade Calculator',   icon: '⌗', render: (c) => CalculatorView.render(c) },
     settings:   { label: 'Settings',           icon: '◌', render: (c) => SettingsView.render(c)   },
   };
 
   const NAV_SECTIONS = [
     { label: 'Overview',  items: ['dashboard', 'portfolio'] },
     { label: 'Analysis',  items: ['trades', 'analytics', 'risk'] },
-    { label: 'Finance',   items: ['cashflow'] },
+    { label: 'Finance',   items: ['cashflow', 'calculator'] },
     { label: 'System',    items: ['settings'] },
   ];
 
@@ -42,6 +43,14 @@
     // Initial navigation
     const initial = location.hash.replace('#','') || 'dashboard';
     navigateTo(VIEWS[initial] ? initial : 'dashboard');
+
+    // Handle manual hash navigation (e.g., user returns from other pages/files)
+    window.addEventListener('hashchange', () => {
+      const target = location.hash.replace('#', '');
+      if (!target || !VIEWS[target]) return;
+      if (target === currentViewId) return;
+      PmsState.setView(target);
+    });
   }
 
   function ensureSidebarOverlay() {
@@ -58,6 +67,7 @@
   function buildSidebar() {
     const sidebar = document.getElementById('pms-sidebar');
     sidebar.innerHTML = `
+      <button class="sidebar-close-btn" id="sidebar-close-btn" type="button" aria-label="Close menu">✕</button>
       <div class="sidebar-brand">
         <div class="sidebar-brand-name">NEPSE Terminal</div>
         <div class="sidebar-brand-sub">Portfolio Management System</div>
@@ -79,6 +89,10 @@
         sectionEl.appendChild(item);
       });
       nav.appendChild(sectionEl);
+    });
+
+    sidebar.querySelector('#sidebar-close-btn')?.addEventListener('click', () => {
+      document.getElementById('pms-app')?.classList.remove('sidebar-open');
     });
 
   }

@@ -47,19 +47,18 @@ const SettingsView = (() => {
           </div>
         </div>
 
-        <!-- Bulk LTP Update -->
+        <!-- Small LTP Update -->
         <div class="pms-card section-gap">
           <div class="pms-card-header">
-            <span class="pms-card-title">Bulk LTP Update</span>
-            <span style="font-size:11px;color:var(--text-muted);">Format: SCRIPT,LTP per line</span>
+            <span class="pms-card-title">Small Update LTP</span>
+            <span style="font-size:11px;color:var(--text-muted);">Upload CSV: SCRIPT,LTP</span>
           </div>
           <div class="pms-card-body">
             <div style="display:flex;flex-direction:column;gap:12px;">
-              <textarea class="pms-input" id="ltp-bulk-input" rows="8" placeholder="NABIL,1250.50&#10;NICA,795.00&#10;NTC,820.00" style="resize:vertical;font-family:var(--font-mono);font-size:12px;"></textarea>
-              <div style="display:flex;gap:8px;">
-                <button class="pms-btn pms-btn-primary" id="ltp-apply-btn">Apply LTP Updates</button>
-                <button class="pms-btn pms-btn-ghost" id="ltp-clear-btn">Clear</button>
-              </div>
+              <label class="pms-btn pms-btn-ghost" style="width:max-content;cursor:pointer;">
+                ⬆ Upload LTP CSV
+                <input type="file" id="ltp-file-input" accept=".csv,.txt" style="display:none;">
+              </label>
               <div id="ltp-status" style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono);min-height:16px;"></div>
             </div>
           </div>
@@ -147,47 +146,27 @@ const SettingsView = (() => {
       });
     };
 
-    // LTP Bulk Update
-    container.querySelector('#ltp-apply-btn').onclick = () => applyLTPBulk(container);
-    container.querySelector('#ltp-clear-btn').onclick = () => {
-      container.querySelector('#ltp-bulk-input').value = '';
-      container.querySelector('#ltp-status').textContent = '';
+    // LTP CSV Update
+    container.querySelector('#ltp-file-input').onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      await applyLTPBulk(container, file);
+      e.target.value = '';
     };
   }
 
-  function applyLTPBulk(container) {
-    const raw     = container.querySelector('#ltp-bulk-input').value;
-    const lines   = raw.split('\n').map(l => l.trim()).filter(Boolean);
-    const updates = {};
-    let parsed = 0, errors = 0;
-
-    lines.forEach(line => {
-      const parts = line.split(',');
-      if (parts.length < 2) { errors++; return; }
-      const script = parts[0].trim().toUpperCase();
-      const ltp    = parseFloat(parts[1].trim());
-      if (!script || !Number.isFinite(ltp) || ltp <= 0) { errors++; return; }
-      updates[script] = ltp;
-      parsed++;
-    });
-
-    if (!parsed) { container.querySelector('#ltp-status').textContent = '✕ No valid entries found.'; return; }
-
-    let updated = 0;
-    ['trades', 'longterm'].forEach(key => {
-      const rows = safeJson(key, []);
-      let changed = false;
-      rows.forEach(r => {
-        const script = String(r.script || '').toUpperCase();
-        if (updates[script] !== undefined) { r.ltp = updates[script]; changed = true; updated++; }
-      });
-      if (changed) localStorage.setItem(key, JSON.stringify(rows));
-    });
-
+  async function applyLTPBulk(container, file) {
+    const raw = await file.text();
+    const { updates, parsed, errors } = PmsUI.parseLtpCsv(raw);
+    if (!parsed) {
+      container.querySelector('#ltp-status').textContent = '✕ No valid entries found.';
+      PmsUI.toast('Invalid CSV format', 'error');
+      return;
+    }
+    const updated = PmsUI.applyLtpUpdates(updates);
     container.querySelector('#ltp-status').textContent =
-      `✓ Parsed ${parsed} | Updated ${updated} positions${errors ? ` | ${errors} errors` : ''}`;
+      `✓ File: ${file.name} | Parsed ${parsed} | Updated ${updated}${errors ? ` | ${errors} errors` : ''}`;
     PmsUI.toast(`LTP updated: ${updated} positions`, 'success');
-    window.dispatchEvent(new CustomEvent('pms-portfolio-updated'));
   }
 
   function renderSysInfo(container) {
