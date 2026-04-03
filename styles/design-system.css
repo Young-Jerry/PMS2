@@ -3,7 +3,7 @@
    Theme: Dark financial terminal | Bloomberg × TradingView × Apple Finance
    ═══════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap');
 
 /* ── CSS Custom Properties ───────────────────────────────── */
 :root {
@@ -58,9 +58,9 @@
   --r-lg:  14px;
 
   /* Font */
-  --font-display: 'Syne', system-ui, sans-serif;
+  --font-display: 'Inter', 'Segoe UI', Roboto, system-ui, sans-serif;
   --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
-  --font-body:    var(--font-display);
+  --font-body:    'Inter', 'Segoe UI', Roboto, system-ui, sans-serif;
 
   /* Transitions */
   --t-fast: 120ms ease;
@@ -552,6 +552,14 @@ body {
   flex-direction: column;
   gap: 12px;
   min-height: 100%;
+}
+.cashflow-info-spacer {
+  min-height: 44px;
+}
+.cashflow-form-action-row {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
 }
 
 /* ── Filter Bar ──────────────────────────────────────────── */

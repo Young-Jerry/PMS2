@@ -24,6 +24,7 @@ const CashflowView = (() => {
             <div class="pms-card-body">
               <form id="cashflow-add-form" autocomplete="off">
                 <div class="cashflow-form-stack">
+                  <div class="cashflow-info-spacer" aria-hidden="true"></div>
                   <div class="pms-field">
                     <label class="pms-label">Type</label>
                     <select class="pms-select" name="type">
@@ -39,7 +40,9 @@ const CashflowView = (() => {
                     <label class="pms-label">Note</label>
                     <input class="pms-input" name="note" type="text" placeholder="e.g. Monthly investment">
                   </div>
-                  <button class="pms-btn pms-btn-primary" type="submit">Add Entry</button>
+                  <div class="cashflow-form-action-row">
+                    <button class="pms-btn pms-btn-primary" type="submit">Add Entry</button>
+                  </div>
                 </div>
               </form>
             </div>
@@ -62,7 +65,9 @@ const CashflowView = (() => {
                     <label class="pms-label">Note</label>
                     <input class="pms-input" name="note" type="text" value="Profit Cashed Out" placeholder="Profit Cashed Out">
                   </div>
-                  <button class="pms-btn pms-btn-success" type="submit">Cash Out Profit</button>
+                  <div class="cashflow-form-action-row">
+                    <button class="pms-btn pms-btn-success" type="submit">Cash Out Profit</button>
+                  </div>
                 </div>
               </form>
             </div>
