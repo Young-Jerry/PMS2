@@ -259,18 +259,46 @@ const PortfolioView = (() => {
     input.value = type === 'number' ? (field === 'qty' ? Math.floor(value) : PmsUI.fmt2(value)) : value;
     if (type === 'number') { input.min = '0'; input.step = field === 'qty' ? '1' : '0.01'; }
 
-    input.addEventListener('blur', () => {
+    const applyEdit = () => {
       let newVal = type === 'number'
         ? (field === 'qty' ? Math.floor(PmsUI.num(input.value)) : PmsUI.num(input.value))
         : input.value.trim().toUpperCase();
       if (type === 'number' && !Number.isFinite(newVal)) return;
+      if (type === 'number' && newVal < 0) return;
+      if (field === 'qty' && newVal <= 0) return;
+
       const previousCost = investedCost(row.wacc, row.qty);
+      const previousValue = row[field];
       row[field] = newVal;
       if (field === 'sell1') row.sell2 = newVal * 1.1;
       const newCost = investedCost(row.wacc, row.qty);
-      if (window.PmsCapital) PmsCapital.adjustCash(previousCost - newCost);
+      if (window.PmsCapital) {
+        const cashBefore = PmsCapital.readCash();
+        const cashAfter = PmsCapital.adjustCash(previousCost - newCost, {
+          note: `Position edit · ${row.script} ${String(field).toUpperCase()}`,
+          type: 'position_edit',
+          kind: 'manual',
+          entryCategory: 'transaction',
+          editable: true,
+        });
+        if (cashAfter === cashBefore && previousCost !== newCost) {
+          row[field] = previousValue;
+          if (field === 'sell1') row.sell2 = Number(previousValue || 0) * 1.1;
+          renderRows(document.getElementById('pms-view'));
+          return;
+        }
+      }
       persist(storageKey);
       renderRows(document.getElementById('pms-view'));
+    };
+
+    input.addEventListener('blur', applyEdit);
+    input.addEventListener('change', applyEdit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        input.blur();
+      }
     });
 
     td.appendChild(input);

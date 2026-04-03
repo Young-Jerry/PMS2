@@ -27,6 +27,8 @@ const DashboardView = (() => {
           </div>
         </div>
 
+        <div class="dash-kpi-strip" style="margin-top:14px;" id="dash-kpis"></div>
+
         <div class="section-gap grid-2" style="margin-top:20px;">
           <!-- Allocation Chart -->
           <div class="pms-card">
@@ -44,11 +46,11 @@ const DashboardView = (() => {
           <!-- Profit Curve -->
           <div class="pms-card">
             <div class="pms-card-header">
-              <span class="pms-card-title">Profit Curves</span>
+              <span class="pms-card-title">Profit</span>
               <span id="dash-trade-count" style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);"></span>
             </div>
-            <div class="pms-card-body" style="padding:12px 16px;">
-              <div class="chart-wrap" style="height:200px;">
+            <div class="pms-card-body" style="padding:0;">
+              <div class="chart-wrap dash-profit-wrap">
                 <canvas id="dash-profit-chart"></canvas>
               </div>
             </div>
@@ -82,9 +84,40 @@ const DashboardView = (() => {
 
   function refresh(container) {
     if (!container) return;
+    renderTopStats(container);
     renderPieChart(container);
     renderProfitChart(container);
     renderBreakdown(container);
+  }
+
+  function renderTopStats(container) {
+    const trades   = PmsState.readTrades();
+    const longterm = PmsState.readLongterm();
+    const sipCost  = computeSipCost();
+    const sipValue = computeSipValue();
+
+    const investedTrades = trades.reduce((s, r) => s + (Number(r.wacc || 0) * Number(r.qty || 0)), 0);
+    const investedLong   = longterm.reduce((s, r) => s + (Number(r.wacc || 0) * Number(r.qty || 0)), 0);
+    const totalInvested  = investedTrades + investedLong + sipCost;
+
+    const valueTrades = trades.reduce((s, r) => s + (Number(r.ltp || 0) * Number(r.qty || 0)), 0);
+    const valueLong   = longterm.reduce((s, r) => s + (Number(r.ltp || 0) * Number(r.qty || 0)), 0);
+    const totalValue  = valueTrades + valueLong + sipValue;
+    const booked      = Number(PmsCapital.readProfitCashedOut() || 0);
+
+    const plNow = totalValue - totalInvested;
+    const el = container.querySelector('#dash-kpis');
+    if (!el) return;
+    el.innerHTML = [
+      { label: 'Total Invested', value: PmsUI.currencyRound(totalInvested), cls: '' },
+      { label: 'Total Value', value: PmsUI.currencyRound(totalValue), cls: PmsUI.plClass(plNow) },
+      { label: 'Profit Booked', value: PmsUI.currencyRound(booked), cls: booked > 0 ? 'val-amber' : '' },
+    ].map((k) => `
+      <div class="dash-kpi-card">
+        <div class="dash-kpi-label">${k.label}</div>
+        <div class="dash-kpi-value ${k.cls}">${k.value}</div>
+      </div>
+    `).join('');
   }
 
   function renderPieChart(container) {
@@ -164,67 +197,77 @@ const DashboardView = (() => {
     const canvas = container.querySelector('#dash-profit-chart');
     if (!canvas || !window.Chart) return;
 
-    let realizedCum = 0;
-    const realizedPoints = [0, ...exited.map(r => {
-      realizedCum += Number(r.profit || 0);
-      return PmsUI.round2(realizedCum);
-    })];
+    const events = [
+      ...exited.map((r, i) => ({
+        t: new Date(r.exitedAt || r.createdAt || 0).getTime() || (i + 1),
+        label: r.name || r.script || `Trade ${i + 1}`,
+        realized: Number(r.profit || 0),
+        booked: 0,
+      })),
+      ...profitLedger.map((r, i) => ({
+        t: new Date(r.createdAt || 0).getTime() || (Date.now() + i),
+        label: r.note || `Booked ${i + 1}`,
+        realized: 0,
+        booked: Number(r.baseAmount || Math.abs(Number(r.delta || 0))),
+      })),
+    ].sort((a, b) => a.t - b.t);
 
-    let bookedCum = 0;
-    const bookedPoints = [0, ...profitLedger.map(r => {
-      bookedCum += Number(r.baseAmount || Math.abs(Number(r.delta || 0)));
-      return PmsUI.round2(bookedCum);
-    })];
-    const maxLen = Math.max(realizedPoints.length, bookedPoints.length);
-    const labels = Array.from({ length: maxLen }, (_, i) => i);
-    const realizedSeries = Array.from({ length: maxLen }, (_, i) => realizedPoints[Math.min(i, realizedPoints.length - 1)] ?? 0);
-    const bookedSeries = Array.from({ length: maxLen }, (_, i) => bookedPoints[Math.min(i, bookedPoints.length - 1)] ?? 0);
+    let cumulativeRealized = 0;
+    let cumulativeBooked = 0;
+    const points = [{ x: 0, y: 0, meta: 'Start' }];
+    events.forEach((ev, idx) => {
+      cumulativeRealized += ev.realized;
+      cumulativeBooked += ev.booked;
+      points.push({
+        x: idx + 1,
+        y: PmsUI.round2(cumulativeRealized - cumulativeBooked),
+        meta: ev.label,
+      });
+    });
+    const labels = points.map((_, idx) => idx);
 
     profitChart = new Chart(canvas, {
       type: 'line',
       data: {
         labels,
-        datasets: [
-          {
-            label: 'Realized Profit',
-            data: realizedSeries,
-            borderColor: '#22c55e',
-            borderWidth: 2,
-            fill: true,
-            backgroundColor: '#22c55e14',
-            tension: 0.3,
-            pointRadius: 0,
-            pointHoverRadius: 4,
+        datasets: [{
+          label: 'Net Profit (Realized − Booked)',
+          data: points.map(p => p.y),
+          borderColor: '#3b82f6',
+          borderWidth: 2.5,
+          fill: true,
+          backgroundColor: (ctx) => {
+            const chart = ctx.chart;
+            const { ctx: c, chartArea } = chart;
+            if (!chartArea) return 'rgba(59,130,246,0.12)';
+            const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+            gradient.addColorStop(0, 'rgba(59,130,246,0.28)');
+            gradient.addColorStop(1, 'rgba(59,130,246,0.03)');
+            return gradient;
           },
-          {
-            label: 'Profit Booked (Cashflow)',
-            data: bookedSeries,
-            borderColor: '#f59e0b',
-            borderWidth: 2,
-            fill: false,
-            tension: 0.3,
-            pointRadius: 0,
-            pointHoverRadius: 4,
-          },
-        ],
+          tension: 0.35,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#60a5fa',
+        }],
       },
       options: {
         animation: false, responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'nearest', intersect: false },
         plugins: {
-          legend: { display: true, labels: { color: '#8892a4', boxWidth: 10 } },
+          legend: { display: false },
           tooltip: {
             callbacks: {
+              title: (items) => points[items?.[0]?.dataIndex || 0]?.meta || 'Profit',
               label: (ctx) => `${ctx.dataset.label}: ${PmsUI.currency(ctx.parsed.y)}`,
-              title: (items) => `Point ${items[0]?.label}`,
             },
           },
         },
         scales: {
-          x: { display: false },
+          x: { display: false, grid: { display: false }, border: { display: false } },
           y: {
-            ticks: { color: '#4a5568', callback: v => PmsUI.currencyRound(v), font: { size: 10 } },
-            grid: { color: 'rgba(255,255,255,0.05)' },
+            ticks: { color: '#7f8aa3', callback: v => PmsUI.currencyRound(v), font: { size: 10 } },
+            grid: { color: 'rgba(255,255,255,0.045)' },
             border: { display: false },
           },
         },

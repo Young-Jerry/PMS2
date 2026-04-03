@@ -17,13 +17,13 @@ const CashflowView = (() => {
         <!-- Balance KPIs -->
         <div class="stat-grid" id="cashflow-kpis"></div>
 
-        <div class="grid-2 section-gap">
+        <div class="grid-2 section-gap cashflow-form-grid">
           <!-- Add Transaction Form -->
-          <div class="pms-card">
+          <div class="pms-card cashflow-form-card">
             <div class="pms-card-header"><span class="pms-card-title">Add Transaction</span></div>
             <div class="pms-card-body">
               <form id="cashflow-add-form" autocomplete="off">
-                <div style="display:flex;flex-direction:column;gap:12px;">
+                <div class="cashflow-form-stack">
                   <div class="pms-field">
                     <label class="pms-label">Type</label>
                     <select class="pms-select" name="type">
@@ -46,11 +46,11 @@ const CashflowView = (() => {
           </div>
 
           <!-- Profit Cashout Form -->
-          <div class="pms-card">
+          <div class="pms-card cashflow-form-card">
             <div class="pms-card-header"><span class="pms-card-title">Cash Out Profit</span></div>
             <div class="pms-card-body">
               <form id="cashflow-profit-form" autocomplete="off">
-                <div style="display:flex;flex-direction:column;gap:12px;">
+                <div class="cashflow-form-stack">
                   <div style="padding:10px;background:var(--amber-dim);border-radius:var(--r-md);font-size:12px;color:var(--amber);">
                     ℹ A Rs 8 processing fee applies per cashout operation.
                   </div>
@@ -185,7 +185,7 @@ const CashflowView = (() => {
       const isProfit  = entry.entryCategory === 'profit';
       const isFee     = entry.entryCategory === 'profit_fee';
       const typeLabel = isProfit ? 'Profit Out' : isFee ? 'Profit Fee' : (isCredit ? 'Cash In' : 'Cash Out');
-      const catLabel  = isProfit || isFee ? 'Profit Entry' : 'Transaction';
+      const catLabel  = isProfit || isFee ? 'Profit Entry' : (entry.kind === 'system' ? 'System' : 'Transaction');
       const dateStr   = entry.createdAt ? new Date(entry.createdAt).toLocaleString('en-IN', { dateStyle:'short', timeStyle:'short' }) : '—';
 
       const tr = document.createElement('tr');
@@ -196,10 +196,8 @@ const CashflowView = (() => {
         <td style="color:var(--text-secondary);max-width:200px;overflow:hidden;text-overflow:ellipsis;">${PmsUI.esc(entry.note || '')}</td>
         <td class="${isCredit ? 'val-profit' : 'val-loss'}" style="font-weight:600;">${money(entry.delta)}</td>
         <td class="actions-cell">
-          ${entry.editable ? `
-            <button class="pms-btn pms-btn-icon" data-edit="${entry.id}">✎</button>
-            <button class="pms-btn pms-btn-icon pms-btn-danger" data-del="${entry.id}">✕</button>
-          ` : ''}
+          <button class="pms-btn pms-btn-icon" data-edit="${entry.id}">✎</button>
+          <button class="pms-btn pms-btn-icon pms-btn-danger" data-del="${entry.id}">✕</button>
         </td>
       `;
       tbody.appendChild(tr);

@@ -319,6 +319,35 @@ body {
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: var(--space-md);
 }
+
+.dash-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+.dash-kpi-card {
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+}
+.dash-kpi-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.dash-kpi-value {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 600;
+}
+.dash-profit-wrap {
+  min-height: 280px;
+  height: 100%;
+  padding: 12px 16px 8px;
+}
 .stat-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -507,6 +536,23 @@ body {
 .pms-input:focus, .pms-select:focus { border-color: var(--accent); }
 .pms-select { cursor: pointer; }
 .pms-select option { background: var(--bg-panel); }
+
+.cashflow-form-grid {
+  align-items: stretch;
+}
+.cashflow-form-card {
+  display: flex;
+  flex-direction: column;
+}
+.cashflow-form-card .pms-card-body {
+  flex: 1;
+}
+.cashflow-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+}
 
 /* ── Filter Bar ──────────────────────────────────────────── */
 .filter-bar {
@@ -819,6 +865,7 @@ body {
 @media (max-width: 640px) {
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
   .stat-grid { grid-template-columns: repeat(2,1fr); }
+  .dash-kpi-strip { grid-template-columns: 1fr; }
   #pms-view { padding: var(--space-md); }
 }
 
