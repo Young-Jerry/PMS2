@@ -131,8 +131,46 @@ const PmsUI = (() => {
     </svg>`;
   }
 
+  function parseLtpCsv(text) {
+    const updates = {};
+    let parsed = 0;
+    let errors = 0;
+    const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    lines.forEach((line) => {
+      const [rawScript, rawLtp] = line.split(',').map(v => String(v || '').trim());
+      const script = rawScript.toUpperCase();
+      const ltp = Number(rawLtp);
+      if (!script || !Number.isFinite(ltp) || ltp <= 0) { errors++; return; }
+      updates[script] = ltp;
+      parsed++;
+    });
+    return { updates, parsed, errors };
+  }
+
+  function applyLtpUpdates(updates) {
+    let updated = 0;
+    ['trades', 'longterm'].forEach((key) => {
+      let changed = false;
+      const rows = key === 'trades' ? PmsState.readTrades() : PmsState.readLongterm();
+      rows.forEach((row) => {
+        const script = String(row.script || '').toUpperCase();
+        if (updates[script] !== undefined) {
+          row.ltp = Number(updates[script]);
+          changed = true;
+          updated++;
+        }
+      });
+      if (!changed) return;
+      if (key === 'trades') PmsState.persistTrades(rows);
+      else PmsState.persistLongterm(rows);
+    });
+    window.dispatchEvent(new CustomEvent('pms-portfolio-updated'));
+    return updated;
+  }
+
   return {
     currency, currencyRound, pct, num, fmt2, fmtQty, esc, plClass, round2,
     modal, confirm, toast, td, tdHTML, startMarketTimer, sparkline,
+    parseLtpCsv, applyLtpUpdates,
   };
 })();

@@ -102,6 +102,7 @@ body {
   flex-direction: column;
   overflow: hidden;
   z-index: 10;
+  position: relative;
 }
 
 .sidebar-brand {
@@ -260,6 +261,19 @@ body {
   padding: 4px 8px;
   cursor: pointer;
 }
+.sidebar-close-btn {
+  display: none;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  border: 1px solid var(--border-bright);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-radius: var(--r-sm);
+  padding: 2px 8px;
+  cursor: pointer;
+}
 
 /* ── View Container ──────────────────────────────────────── */
 #pms-view {
@@ -322,12 +336,11 @@ body {
   height: 2px;
   background: var(--accent);
   opacity: 0;
-  transition: opacity var(--t-std);
 }
-.stat-card:hover::before { opacity: 1; }
-.stat-card.profit-card::before { background: var(--profit); opacity: 1; }
-.stat-card.loss-card::before   { background: var(--loss); opacity: 1; }
-.stat-card.amber-card::before  { background: var(--amber); opacity: 1; }
+.stat-card:hover::before { opacity: 0; }
+.stat-card.profit-card::before { background: var(--profit); opacity: 0; }
+.stat-card.loss-card::before   { background: var(--loss); opacity: 0; }
+.stat-card.amber-card::before  { background: var(--amber); opacity: 0; }
 
 .stat-label {
   font-size: 10px;
@@ -345,8 +358,8 @@ body {
   line-height: 1.1;
 }
 .stat-card .stat-value { color: var(--text-primary) !important; }
-.stat-card.profit-card:hover .stat-value { color: var(--profit) !important; }
-.stat-card.loss-card:hover .stat-value { color: var(--loss) !important; }
+.stat-card.profit-card:hover .stat-value { color: var(--text-primary) !important; }
+.stat-card.loss-card:hover .stat-value { color: var(--text-primary) !important; }
 .stat-sub {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -771,7 +784,13 @@ body {
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 960px) {
-  .sidebar-toggle-btn { display: inline-flex; }
+  .sidebar-toggle-btn {
+    display: inline-flex;
+    position: fixed;
+    left: 10px;
+    top: 10px;
+    z-index: 25;
+  }
   #pms-sidebar {
     position: fixed;
     left: 0;
@@ -781,6 +800,7 @@ body {
     transition: transform var(--t-std);
     width: min(280px, 82vw);
   }
+  .sidebar-close-btn { display: inline-flex; }
   #pms-app.sidebar-open #pms-sidebar { transform: translateX(0); }
   .pms-sidebar-overlay {
     position: fixed;

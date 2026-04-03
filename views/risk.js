@@ -62,8 +62,8 @@ const RiskView = (() => {
     const trades    = PmsState.readTrades();
     const longterm  = PmsState.readLongterm();
     const allPos    = [
-      ...trades.map(r => ({ ...r, source: 'Trade' })),
-      ...longterm.map(r => ({ ...r, source: 'Long Term' })),
+      ...trades.map(r => ({ ...r, source: 'Trade', sourceKey: 'trades' })),
+      ...longterm.map(r => ({ ...r, source: 'Long Term', sourceKey: 'longterm' })),
     ];
 
     const totalInvested = allPos.reduce((s,r) => s + r.wacc * r.qty, 0);
@@ -179,7 +179,9 @@ const RiskView = (() => {
         <td><span class="badge badge-blue">${r.source}</span></td>
         <td>${PmsUI.fmtQty(r.qty)}</td>
         <td>${PmsUI.currency(r.wacc)}</td>
-        <td>${PmsUI.currency(r.ltp)}</td>
+        <td>
+          <input class="inline-input" data-ltp-id="${r.id}" data-ltp-source="${r.sourceKey}" type="number" min="0" step="0.01" value="${PmsUI.fmt2(r.ltp)}">
+        </td>
         <td>${PmsUI.currency(invested)}</td>
         <td>
           <div style="display:flex;align-items:center;gap:8px;">
@@ -193,6 +195,22 @@ const RiskView = (() => {
         <td><span class="badge ${riskClass}">${risk}</span></td>
       </tr>`;
     }).join('');
+
+    tbody.querySelectorAll('[data-ltp-id]').forEach((input) => {
+      input.addEventListener('blur', () => {
+        const key = input.dataset.ltpSource;
+        const id = input.dataset.ltpId;
+        const value = Number(input.value);
+        if (!Number.isFinite(value) || value < 0) return;
+        const rows = key === 'trades' ? PmsState.readTrades() : PmsState.readLongterm();
+        const row = rows.find(r => r.id === id);
+        if (!row) return;
+        row.ltp = value;
+        if (key === 'trades') PmsState.persistTrades(rows);
+        else PmsState.persistLongterm(rows);
+        window.dispatchEvent(new CustomEvent('pms-portfolio-updated'));
+      });
+    });
   }
 
   return { render };

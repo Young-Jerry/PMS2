@@ -15,6 +15,10 @@ const DashboardView = (() => {
             <div class="view-subtitle">Portfolio overview &amp; performance summary</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
+            <label class="pms-btn pms-btn-primary" style="cursor:pointer;">
+              ⬆ Update LTP
+              <input type="file" id="dash-ltp-input" accept=".csv,.txt" style="display:none">
+            </label>
             <button class="pms-btn pms-btn-ghost" id="dash-backup-btn">⬇ Backup</button>
             <label class="pms-btn pms-btn-ghost" style="cursor:pointer;">
               ⬆ Restore
@@ -22,9 +26,6 @@ const DashboardView = (() => {
             </label>
           </div>
         </div>
-
-        <!-- KPI Row -->
-        <div class="stat-grid" id="dash-kpis"></div>
 
         <div class="section-gap grid-2" style="margin-top:20px;">
           <!-- Allocation Chart -->
@@ -43,7 +44,7 @@ const DashboardView = (() => {
           <!-- Profit Curve -->
           <div class="pms-card">
             <div class="pms-card-header">
-              <span class="pms-card-title">Realized Profit Curve</span>
+              <span class="pms-card-title">Profit Curves</span>
               <span id="dash-trade-count" style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);"></span>
             </div>
             <div class="pms-card-body" style="padding:12px 16px;">
@@ -74,55 +75,16 @@ const DashboardView = (() => {
   }
 
   function bindEvents(container) {
+    container.querySelector('#dash-ltp-input').onchange = (e) => uploadLtpCsv(e, container);
     container.querySelector('#dash-backup-btn').onclick = () => downloadBackup();
     container.querySelector('#dash-restore-input').onchange = (e) => restoreBackup(e, container);
   }
 
   function refresh(container) {
     if (!container) return;
-    renderKPIs(container);
     renderPieChart(container);
     renderProfitChart(container);
     renderBreakdown(container);
-  }
-
-  function renderKPIs(container) {
-    const trades    = PmsState.readTrades();
-    const longterm  = PmsState.readLongterm();
-    const exited    = PmsState.readExited();
-    const cash      = PmsCapital.readCash();
-
-    const tradeValue   = trades.reduce((s,r) => s + r.ltp * r.qty, 0);
-    const tradeCost    = trades.reduce((s,r) => s + r.wacc * r.qty, 0);
-    const ltValue      = longterm.reduce((s,r) => s + r.ltp * r.qty, 0);
-    const ltCost       = longterm.reduce((s,r) => s + r.wacc * r.qty, 0);
-    const sipValue     = computeSipValue();
-    const sipCost      = computeSipCost();
-
-    const totalInvested = tradeCost + ltCost + sipCost;
-    const totalCurrent  = tradeValue + ltValue + sipValue;
-    const unrealizedPL  = totalCurrent - totalInvested;
-    const realizedPL    = exited.reduce((s,r) => s + Number(r.profit || 0), 0);
-    const totalPortfolio = totalCurrent + cash;
-    const roi = totalInvested > 0 ? (unrealizedPL / totalInvested) * 100 : 0;
-
-    const kpis = [
-      { label: 'Portfolio Value', value: PmsUI.currency(totalCurrent), sub: `Cash: ${PmsUI.currencyRound(cash)}`, card: '' },
-      { label: 'Total Invested',  value: PmsUI.currency(totalInvested), sub: `${trades.length+longterm.length} positions`, card: '' },
-      { label: 'Unrealized P&L',  value: PmsUI.currency(unrealizedPL),  sub: `ROI ${PmsUI.pct(roi)}`, card: unrealizedPL >= 0 ? 'profit-card' : 'loss-card' },
-      { label: 'Realized Profit', value: PmsUI.currency(realizedPL),    sub: `${exited.length} closed trades`, card: realizedPL >= 0 ? 'profit-card' : 'loss-card' },
-      { label: 'Cash Balance',    value: PmsUI.currencyRound(cash),      sub: 'Available', card: '' },
-      { label: 'Net Worth',       value: PmsUI.currency(totalPortfolio), sub: 'Portfolio + Cash', card: '' },
-    ];
-
-    const el = container.querySelector('#dash-kpis');
-    el.innerHTML = kpis.map(k => `
-      <div class="stat-card ${k.card}">
-        <div class="stat-label">${k.label}</div>
-        <div class="stat-value ${k.card === 'profit-card' ? 'val-profit' : k.card === 'loss-card' ? 'val-loss' : ''}">${k.value}</div>
-        <div class="stat-sub">${k.sub}</div>
-      </div>
-    `).join('');
   }
 
   function renderPieChart(container) {
@@ -191,37 +153,70 @@ const DashboardView = (() => {
 
   function renderProfitChart(container) {
     const exited = PmsState.readExited();
+    const profitLedger = PmsCapital.readLedger()
+      .filter(r => r.entryCategory === 'profit')
+      .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+
     const tradeCount = container.querySelector('#dash-trade-count');
-    if (tradeCount) tradeCount.textContent = `${exited.length} trades`;
+    if (tradeCount) tradeCount.textContent = `${exited.length} closed trades • ${profitLedger.length} profit booked entries`;
 
     if (profitChart) { profitChart.destroy(); profitChart = null; }
     const canvas = container.querySelector('#dash-profit-chart');
-    if (!canvas || !exited.length || !window.Chart) return;
+    if (!canvas || !window.Chart) return;
 
-    let cum = 0;
-    const points = [0, ...exited.map(r => { cum += Number(r.profit || 0); return PmsUI.round2(cum); })];
-    const labels = points.map((_, i) => i);
-    const color  = cum >= 0 ? '#22c55e' : '#ef4444';
+    let realizedCum = 0;
+    const realizedPoints = [0, ...exited.map(r => {
+      realizedCum += Number(r.profit || 0);
+      return PmsUI.round2(realizedCum);
+    })];
+
+    let bookedCum = 0;
+    const bookedPoints = [0, ...profitLedger.map(r => {
+      bookedCum += Number(r.baseAmount || Math.abs(Number(r.delta || 0)));
+      return PmsUI.round2(bookedCum);
+    })];
+    const maxLen = Math.max(realizedPoints.length, bookedPoints.length);
+    const labels = Array.from({ length: maxLen }, (_, i) => i);
+    const realizedSeries = Array.from({ length: maxLen }, (_, i) => realizedPoints[Math.min(i, realizedPoints.length - 1)] ?? 0);
+    const bookedSeries = Array.from({ length: maxLen }, (_, i) => bookedPoints[Math.min(i, bookedPoints.length - 1)] ?? 0);
 
     profitChart = new Chart(canvas, {
       type: 'line',
       data: {
         labels,
-        datasets: [{
-          data: points, borderColor: color, borderWidth: 2, fill: true,
-          backgroundColor: `${color}14`, tension: 0.3, pointRadius: 0,
-          pointHoverRadius: 4,
-        }],
+        datasets: [
+          {
+            label: 'Realized Profit',
+            data: realizedSeries,
+            borderColor: '#22c55e',
+            borderWidth: 2,
+            fill: true,
+            backgroundColor: '#22c55e14',
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+          },
+          {
+            label: 'Profit Booked (Cashflow)',
+            data: bookedSeries,
+            borderColor: '#f59e0b',
+            borderWidth: 2,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+          },
+        ],
       },
       options: {
         animation: false, responsive: true, maintainAspectRatio: false,
         interaction: { mode: 'nearest', intersect: false },
         plugins: {
-          legend: { display: false },
+          legend: { display: true, labels: { color: '#8892a4', boxWidth: 10 } },
           tooltip: {
             callbacks: {
-              label: (ctx) => `Profit: ${PmsUI.currency(ctx.parsed.y)}`,
-              title: (items) => `Trade ${items[0]?.label}`,
+              label: (ctx) => `${ctx.dataset.label}: ${PmsUI.currency(ctx.parsed.y)}`,
+              title: (items) => `Point ${items[0]?.label}`,
             },
           },
         },
@@ -297,6 +292,23 @@ const DashboardView = (() => {
       refresh(container);
     } catch {
       PmsUI.toast('Invalid backup file', 'error');
+    }
+    e.target.value = '';
+  }
+
+  async function uploadLtpCsv(e, container) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const { updates, parsed, errors } = PmsUI.parseLtpCsv(await file.text());
+      if (!parsed) { PmsUI.toast('No valid CSV rows found', 'error'); return; }
+      const updated = PmsUI.applyLtpUpdates(updates);
+      PmsUI.toast(`LTP updated: ${updated} positions`, 'success');
+      container.querySelector('#dash-backup-status').textContent =
+        `LTP update from ${file.name} → Parsed ${parsed}, Updated ${updated}${errors ? `, Errors ${errors}` : ''}`;
+      refresh(container);
+    } catch {
+      PmsUI.toast('Unable to parse CSV file', 'error');
     }
     e.target.value = '';
   }
