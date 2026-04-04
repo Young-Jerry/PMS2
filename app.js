@@ -6,6 +6,7 @@
 (() => {
   const VIEWS = {
     dashboard:  { label: 'Dashboard',         icon: '⬡', render: (c) => DashboardView.render(c)  },
+    insights:   { label: 'Insights',          icon: '◍', render: (c) => InsightsView.render(c)   },
     portfolio:  { label: 'Portfolio',          icon: '◧', render: (c) => PortfolioView.render(c)  },
     trades:     { label: 'Trade History',      icon: '↕', render: (c) => TradesView.render(c)     },
     analytics:  { label: 'Analytics',          icon: '◈', render: (c) => AnalyticsView.render(c)  },
@@ -16,7 +17,7 @@
   };
 
   const NAV_SECTIONS = [
-    { label: 'Overview',  items: ['dashboard', 'portfolio'] },
+    { label: 'Overview',  items: ['dashboard', 'insights', 'portfolio'] },
     { label: 'Analysis',  items: ['trades', 'analytics', 'risk'] },
     { label: 'Finance',   items: ['cashflow', 'calculator'] },
     { label: 'System',    items: ['settings'] },
@@ -92,7 +93,11 @@
     });
 
     sidebar.querySelector('#sidebar-close-btn')?.addEventListener('click', () => {
-      document.getElementById('pms-app')?.classList.remove('sidebar-open');
+      const app = document.getElementById('pms-app');
+      if (!app) return;
+      const isMobile = window.matchMedia('(max-width: 960px)').matches;
+      if (isMobile) app.classList.remove('sidebar-open');
+      else app.classList.add('sidebar-collapsed');
     });
 
   }
@@ -107,7 +112,6 @@
           Cash: <strong data-cash-display>Rs 0</strong>
         </div>
         <div id="topbar-market" style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);">
-          <span class="market-dot dot-red"></span>
           <span id="topbar-market-text">NEPSE --:--:--</span>
         </div>
       </div>
@@ -118,7 +122,13 @@
 
   function toggleSidebar() {
     const app = document.getElementById('pms-app');
-    app?.classList.toggle('sidebar-open');
+    if (!app) return;
+    const isMobile = window.matchMedia('(max-width: 960px)').matches;
+    if (isMobile) {
+      app.classList.toggle('sidebar-open');
+      return;
+    }
+    app.classList.toggle('sidebar-collapsed');
   }
 
   function navigateTo(viewId) {
