@@ -46,11 +46,12 @@ const PmsState = (() => {
       sipStateV4:     readSip(),
       cashBalanceV1:  localStorage.getItem('cashBalanceV1') || '0',
       cashLedgerV1:   safeJson('cashLedgerV1', []),
+      dailyPLHistory: safeJson('dailyPLHistory', []),
     };
   }
 
   function restoreSnapshot(payload) {
-    const keys = ['trades','longterm','exitedTradesV2','sipStateV4','cashBalanceV1','cashLedgerV1'];
+    const keys = ['trades','longterm','exitedTradesV2','sipStateV4','cashBalanceV1','cashLedgerV1','dailyPLHistory'];
     keys.forEach((k) => {
       if (payload[k] !== undefined) {
         localStorage.setItem(k, typeof payload[k] === 'string' ? payload[k] : JSON.stringify(payload[k]));

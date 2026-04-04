@@ -47,7 +47,26 @@ const PmsUI = (() => {
     const close = () => backdrop.remove();
     card.querySelector('[data-close]').onclick = close;
     backdrop.onclick = (e) => { if (e.target === backdrop) close(); };
-    return { backdrop, card, close };
+  
+
+  function readDailyPLHistory() {
+    return safeJson('dailyPLHistory', []);
+  }
+
+  function persistDailyPLHistory(rows) {
+    localStorage.setItem('dailyPLHistory', JSON.stringify(rows || []));
+  }
+
+  function capturePortfolioSnapshot(tag = 'manual') {
+    const rows = [...PmsState.readTrades(), ...PmsState.readLongterm()].map(r => ({ script: String(r.script||'').toUpperCase(), qty: Number(r.qty||0), ltp: Number(r.ltp||0) }));
+    const total = rows.reduce((s,r)=>s + (r.qty*r.ltp),0);
+    const history = readDailyPLHistory();
+    history.push({ id: crypto.randomUUID(), capturedAt: new Date().toISOString(), date: new Date().toISOString().slice(0,10), tag, rows, total });
+    persistDailyPLHistory(history.slice(-365));
+    return history[history.length-1];
+  }
+
+  return { backdrop, card, close };
   }
 
   function confirm({ title, message, confirmText = 'Confirm', danger = false, onConfirm }) {
@@ -168,9 +187,27 @@ const PmsUI = (() => {
     return updated;
   }
 
+  function readDailyPLHistory() {
+    return safeJson('dailyPLHistory', []);
+  }
+
+  function persistDailyPLHistory(rows) {
+    localStorage.setItem('dailyPLHistory', JSON.stringify(rows || []));
+  }
+
+  function capturePortfolioSnapshot(tag = 'manual') {
+    const rows = [...PmsState.readTrades(), ...PmsState.readLongterm()].map(r => ({ script: String(r.script||'').toUpperCase(), qty: Number(r.qty||0), ltp: Number(r.ltp||0) }));
+    const total = rows.reduce((s,r)=>s + (r.qty*r.ltp),0);
+    const history = readDailyPLHistory();
+    history.push({ id: crypto.randomUUID(), capturedAt: new Date().toISOString(), date: new Date().toISOString().slice(0,10), tag, rows, total });
+    persistDailyPLHistory(history.slice(-365));
+    return history[history.length-1];
+  }
+
   return {
     currency, currencyRound, pct, num, fmt2, fmtQty, esc, plClass, round2,
     modal, confirm, toast, td, tdHTML, startMarketTimer, sparkline,
     parseLtpCsv, applyLtpUpdates,
+    readDailyPLHistory, persistDailyPLHistory, capturePortfolioSnapshot,
   };
 })();

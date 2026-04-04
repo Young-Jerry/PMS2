@@ -1,56 +1,29 @@
-/**
- * NEPSE Terminal — SPA Router & App Bootstrap
- * Wires sidebar navigation, state transitions, and view rendering.
- * Single source of truth: PmsState.getView()
- */
 (() => {
   const VIEWS = {
-    dashboard:  { label: 'Dashboard',         icon: '⬡', render: (c) => DashboardView.render(c)  },
-    insights:   { label: 'Insights',          icon: '◍', render: (c) => InsightsView.render(c)   },
-    portfolio:  { label: 'Portfolio',          icon: '◧', render: (c) => PortfolioView.render(c)  },
-    trades:     { label: 'Trade History',      icon: '↕', render: (c) => TradesView.render(c)     },
-    analytics:  { label: 'Analytics',          icon: '◈', render: (c) => AnalyticsView.render(c)  },
-    risk:       { label: 'Risk Analysis',      icon: '◬', render: (c) => RiskView.render(c)       },
-    cashflow:   { label: 'Cashflow',           icon: '⬡', render: (c) => CashflowView.render(c)   },
-    calculator: { label: 'Trade Calculator',   icon: '⌗', render: (c) => CalculatorView.render(c) },
-    settings:   { label: 'Settings',           icon: '◌', render: (c) => SettingsView.render(c)   },
+    dashboard:  { label: 'Dashboard',   icon: '⬢', render: (c) => DashboardView.render(c) },
+    portfolio:  { label: 'Portfolio',   icon: '◫', render: (c) => PortfolioView.render(c) },
+    trades:     { label: 'Trades',      icon: '↕', render: (c) => TradesView.render(c) },
+    analytics:  { label: 'Analytics',   icon: '◈', render: (c) => AnalyticsView.render(c) },
+    cashflow:   { label: 'Cashflow',    icon: '◌', render: (c) => CashflowView.render(c) },
+    performance:{ label: 'Performance', icon: '◭', render: (c) => PerformanceView.render(c) },
+    comparison: { label: 'Comparison',  icon: '◪', render: (c) => ComparisonView.render(c) },
+    dailypl:    { label: 'Daily P/L',   icon: '◉', render: (c) => DailyPLView.render(c) },
+    datacenter: { label: 'Data Center', icon: '⌁', render: (c) => DataCenterView.render(c) },
+    settings:   { label: 'Settings',    icon: '⚙', render: (c) => SettingsView.render(c) },
   };
 
-  const NAV_SECTIONS = [
-    { label: 'Overview',  items: ['dashboard', 'insights', 'portfolio'] },
-    { label: 'Analysis',  items: ['trades', 'analytics', 'risk'] },
-    { label: 'Finance',   items: ['cashflow', 'calculator'] },
-    { label: 'System',    items: ['settings'] },
-  ];
-
+  const ORDER = ['dashboard','portfolio','trades','analytics','cashflow','performance','comparison','dailypl','datacenter','settings'];
   let currentViewId = null;
 
   function boot() {
-    buildSidebar();
-    buildTopbar();
-    ensureSidebarOverlay();
-
-    // Subscribe to state changes
-    PmsState.subscribe(({ view }) => {
-      navigateTo(view);
-    });
-
-    // External data changes -> refresh current view if needed
-    window.addEventListener('pms-cash-updated',      () => refreshCurrentView());
-    window.addEventListener('pms-portfolio-updated', () => refreshCurrentView());
-    window.addEventListener('pms-data-restored',     () => refreshCurrentView());
-    window.addEventListener('storage',               () => refreshCurrentView());
-
-    // Initial navigation
+    buildSidebar(); buildTopbar(); ensureSidebarOverlay();
+    PmsState.subscribe(({ view }) => navigateTo(view));
+    ['pms-cash-updated','pms-portfolio-updated','pms-data-restored','storage'].forEach(evt => window.addEventListener(evt, () => refreshCurrentView()));
     const initial = location.hash.replace('#','') || 'dashboard';
     navigateTo(VIEWS[initial] ? initial : 'dashboard');
-
-    // Handle manual hash navigation (e.g., user returns from other pages/files)
     window.addEventListener('hashchange', () => {
       const target = location.hash.replace('#', '');
-      if (!target || !VIEWS[target]) return;
-      if (target === currentViewId) return;
-      PmsState.setView(target);
+      if (target && target !== currentViewId && VIEWS[target]) PmsState.setView(target);
     });
   }
 
@@ -59,76 +32,37 @@
     const overlay = document.createElement('div');
     overlay.id = 'pms-sidebar-overlay';
     overlay.className = 'pms-sidebar-overlay';
-    overlay.addEventListener('click', () => {
-      document.getElementById('pms-app')?.classList.remove('sidebar-open');
-    });
+    overlay.addEventListener('click', () => document.getElementById('pms-app')?.classList.remove('sidebar-open'));
     document.body.appendChild(overlay);
   }
 
   function buildSidebar() {
     const sidebar = document.getElementById('pms-sidebar');
-    sidebar.innerHTML = `
-      <button class="sidebar-close-btn" id="sidebar-close-btn" type="button" aria-label="Close menu">✕</button>
-      <div class="sidebar-brand">
-        <div class="sidebar-brand-name">NEPSE Terminal</div>
-        <div class="sidebar-brand-sub">Portfolio Management System</div>
-      </div>
-      <nav class="sidebar-nav" id="sidebar-nav"></nav>
-    `;
-
+    sidebar.innerHTML = `<button class="sidebar-close-btn" id="sidebar-close-btn" type="button">✕</button><div class="sidebar-brand"><div class="sidebar-brand-name">NEPSE Terminal</div><div class="sidebar-brand-sub">Visual Trading Workspace</div></div><nav class="sidebar-nav" id="sidebar-nav"></nav>`;
     const nav = sidebar.querySelector('#sidebar-nav');
-    NAV_SECTIONS.forEach(section => {
-      const sectionEl = document.createElement('div');
-      sectionEl.innerHTML = `<div class="nav-section-label">${section.label}</div>`;
-      section.items.forEach(id => {
-        const view = VIEWS[id];
-        const item = document.createElement('div');
-        item.className = 'nav-item';
-        item.dataset.view = id;
-        item.innerHTML = `<span class="nav-item-icon">${view.icon}</span><span>${view.label}</span>`;
-        item.onclick = () => PmsState.setView(id);
-        sectionEl.appendChild(item);
-      });
-      nav.appendChild(sectionEl);
+    ORDER.forEach(id => {
+      const item = document.createElement('button');
+      item.className = 'nav-item';
+      item.dataset.view = id;
+      item.innerHTML = `<span class="nav-item-icon">${VIEWS[id].icon}</span><span>${VIEWS[id].label}</span>`;
+      item.onclick = () => PmsState.setView(id);
+      nav.appendChild(item);
     });
-
-    sidebar.querySelector('#sidebar-close-btn')?.addEventListener('click', () => {
-      const app = document.getElementById('pms-app');
-      if (!app) return;
-      const isMobile = window.matchMedia('(max-width: 960px)').matches;
-      if (isMobile) app.classList.remove('sidebar-open');
-      else app.classList.add('sidebar-collapsed');
-    });
-
+    sidebar.querySelector('#sidebar-close-btn')?.addEventListener('click', toggleSidebar);
   }
 
   function buildTopbar() {
     const topbar = document.getElementById('pms-topbar');
-    topbar.innerHTML = `
-      <button class="sidebar-toggle-btn" id="sidebar-toggle-btn" type="button" aria-label="Toggle menu">☰</button>
-      <span class="topbar-title" id="topbar-view-title">Dashboard</span>
-      <div class="topbar-right">
-        <div class="topbar-cash-pill" onclick="PmsState.setView('cashflow')" title="Go to Cashflow">
-          Cash: <strong data-cash-display>Rs 0</strong>
-        </div>
-        <div id="topbar-market" style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);">
-          <span id="topbar-market-text">NEPSE --:--:--</span>
-        </div>
-      </div>
-    `;
+    topbar.innerHTML = `<button class="sidebar-toggle-btn" id="sidebar-toggle-btn" type="button">☰</button><span class="topbar-title" id="topbar-view-title">Dashboard</span><div class="topbar-right"><div class="topbar-cash-pill" onclick="PmsState.setView('cashflow')">Cash: <strong data-cash-display>Rs 0</strong></div><div id="topbar-market"><span id="topbar-market-text">NEPSE --:--:--</span></div></div>`;
     PmsUI.startMarketTimer('topbar-market-text');
-    topbar.querySelector('#sidebar-toggle-btn')?.addEventListener('click', toggleSidebar);
+    topbar.querySelector('#sidebar-toggle-btn').onclick = toggleSidebar;
   }
 
   function toggleSidebar() {
     const app = document.getElementById('pms-app');
     if (!app) return;
     const isMobile = window.matchMedia('(max-width: 960px)').matches;
-    if (isMobile) {
-      app.classList.toggle('sidebar-open');
-      return;
-    }
-    app.classList.toggle('sidebar-collapsed');
+    app.classList.toggle(isMobile ? 'sidebar-open' : 'sidebar-collapsed');
   }
 
   function navigateTo(viewId) {
@@ -136,39 +70,20 @@
     currentViewId = viewId;
     location.hash = viewId;
     document.getElementById('pms-app')?.classList.remove('sidebar-open');
-
-    // Update topbar title
     const titleEl = document.getElementById('topbar-view-title');
     if (titleEl) titleEl.textContent = VIEWS[viewId].label;
-
-    // Update sidebar active state
-    document.querySelectorAll('.nav-item').forEach(el => {
-      el.classList.toggle('active', el.dataset.view === viewId);
-    });
-
-    // Render the view
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === viewId));
     const container = document.getElementById('pms-view');
     container.innerHTML = '';
     VIEWS[viewId].render(container);
-
-    // Update cash widgets
     PmsCapital.updateWidgets();
   }
 
   function refreshCurrentView() {
     if (!currentViewId) return;
-    PmsCapital.updateWidgets();
-    // If dashboard is active, also refresh its charts
-    if (currentViewId === 'dashboard') {
-      const container = document.getElementById('pms-view');
-      if (container && DashboardView.refresh) DashboardView.refresh(container);
-    }
+    navigateTo(currentViewId);
   }
 
-  // Boot when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
 })();
