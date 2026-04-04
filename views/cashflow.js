@@ -74,6 +74,11 @@ const CashflowView = (() => {
           </div>
         </div>
 
+        <div class="grid-2 section-gap">
+          <div class="pms-card"><div class="pms-card-header"><span class="pms-card-title">Cash Balance Timeline</span></div><div class="pms-card-body"><div class="chart-wrap" style="height:220px"><canvas id="cashflow-line"></canvas></div></div></div>
+          <div class="pms-card"><div class="pms-card-header"><span class="pms-card-title">Deposits vs Withdrawals</span></div><div class="pms-card-body"><div class="chart-wrap" style="height:220px"><canvas id="cashflow-bars"></canvas></div></div></div>
+        </div>
+
         <!-- Ledger Table -->
         <div class="table-section section-gap">
           <div class="pms-card-header" style="background:var(--bg-elevated);">
@@ -147,6 +152,7 @@ const CashflowView = (() => {
   function refreshView(container) {
     renderKPIs(container);
     renderLedger(container);
+    renderCharts(container);
   }
 
   function renderKPIs(container) {
@@ -264,5 +270,19 @@ const CashflowView = (() => {
     return `${sign} Rs ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(abs)}`;
   }
 
+
+
+  let lineChart = null;
+  let barChart = null;
+  function renderCharts(container) {
+    if (!window.Chart) return;
+    const ledger = PmsCapital.readLedger().slice().sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+    let run = 0;
+    const labels = []; const series = []; let dep=0, wd=0;
+    ledger.forEach((e,i)=>{ run += Number(e.delta||0); labels.push(`E${i+1}`); series.push(run); if (Number(e.delta)>=0) dep += Number(e.delta); else wd += Math.abs(Number(e.delta)); });
+    lineChart?.destroy(); barChart?.destroy();
+    lineChart = new Chart(container.querySelector('#cashflow-line'), {type:'line', data:{labels, datasets:[{label:'Cash', data:series, borderColor:'#a78bfa'}]}, options:{animation:false,responsive:true,maintainAspectRatio:false}});
+    barChart = new Chart(container.querySelector('#cashflow-bars'), {type:'bar', data:{labels:['Deposits','Withdrawals'], datasets:[{data:[dep,wd], backgroundColor:['#22c55e','#ef4444']}]}, options:{animation:false,responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+  }
   return { render };
 })();

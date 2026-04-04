@@ -1,396 +1,57 @@
-/**
- * Dashboard View
- * Overview: portfolio totals, allocation pie, profit curve, market status
- */
 const DashboardView = (() => {
-  let pieChart = null;
-  let pastTradeChart = null;
-  let bookedProfitChart = null;
+  let allocChart = null;
+  let profitChart = null;
+  let cashChart = null;
 
   function render(container) {
-    container.innerHTML = `
-      <div class="view-enter">
-        <div class="view-header">
-          <div>
-            <div class="view-title">Dashboard</div>
-            <div class="view-subtitle">Portfolio overview &amp; performance summary</div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <label class="pms-btn pms-btn-primary" style="cursor:pointer;">
-              ⬆ Update LTP
-              <input type="file" id="dash-ltp-input" accept=".csv,.txt" style="display:none">
-            </label>
-            <button class="pms-btn pms-btn-ghost" id="dash-backup-btn">⬇ Backup</button>
-            <label class="pms-btn pms-btn-ghost" style="cursor:pointer;">
-              ⬆ Restore
-              <input type="file" id="dash-restore-input" accept=".json" style="display:none">
-            </label>
-          </div>
-        </div>
-
-        <div class="dash-kpi-strip" style="margin-top:14px;" id="dash-kpis"></div>
-
-        <div class="section-gap grid-2" style="margin-top:20px;">
-          <!-- Allocation Chart -->
-          <div class="pms-card">
-            <div class="pms-card-header">
-              <span class="pms-card-title">Portfolio Allocation</span>
-            </div>
-            <div class="pms-card-body" style="display:flex;flex-direction:column;align-items:center;gap:16px;">
-              <div class="chart-wrap" style="height:200px;display:flex;align-items:center;justify-content:center;">
-                <canvas id="dash-pie-chart" height="200"></canvas>
-              </div>
-              <div id="dash-pie-legend" style="width:100%;"></div>
-            </div>
-          </div>
-
-          <!-- Profit Curve -->
-          <div class="pms-card">
-            <div class="pms-card-header">
-              <span class="pms-card-title">Profit</span>
-            </div>
-            <div class="pms-card-body dash-profit-stack">
-              <div class="dash-profit-mini">
-                <div class="dash-profit-mini-title">Past Trade Curve (Profit of now)</div>
-                <div class="chart-wrap">
-                  <canvas id="dash-profit-past-chart"></canvas>
-                </div>
-              </div>
-              <div class="dash-profit-mini">
-                <div class="dash-profit-mini-title">Profit Booked</div>
-                <div class="chart-wrap">
-                  <canvas id="dash-profit-booked-chart"></canvas>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Asset Breakdown -->
-        <div class="section-gap pms-card" style="margin-top:20px;">
-          <div class="pms-card-header">
-            <span class="pms-card-title">Asset Breakdown</span>
-          </div>
-          <div class="pms-card-body">
-            <div id="dash-breakdown"></div>
-          </div>
-        </div>
-
-        <!-- Backup status -->
-        <div id="dash-backup-status" style="text-align:right;margin-top:8px;font-size:11px;color:var(--text-muted);"></div>
-      </div>
-    `;
-
-    bindEvents(container);
-    refresh(container);
+    const m = metrics();
+    container.innerHTML = `<div class="view-enter"><div class="view-header"><div><div class="view-title">Dashboard</div><div class="view-subtitle">High-density portfolio command center</div></div></div>
+      <div class="dash-kpi-strip">${kpiHtml(m)}</div>
+      <div class="grid-2 section-gap">${TerminalUI.card('Portfolio Allocation', '<div class="chart-wrap" style="height:240px"><canvas id="d-alloc"></canvas></div>')}${TerminalUI.card('Profit Curve', '<div class="chart-wrap" style="height:240px"><canvas id="d-profit"></canvas></div>')}</div>
+      <div class="grid-2 section-gap">${TerminalUI.card('Cash Trend', '<div class="chart-wrap" style="height:220px"><canvas id="d-cash"></canvas></div>')}${TerminalUI.card('ROI Sparkline + Recent Activity', `<div style="display:flex;align-items:center;justify-content:space-between;">${PmsUI.sparkline(m.roiSeries,220,60,m.totalProfit>=0?'#34d399':'#f87171')}<div class="stat-value ${PmsUI.plClass(m.roiNow)}">${PmsUI.pct(m.roiNow)}</div></div><div style="margin-top:10px;font-size:12px;color:var(--text-secondary);">${recentActivity()}</div>`)}</div>
+    </div>`;
+    charts(container, m);
   }
 
-  function bindEvents(container) {
-    container.querySelector('#dash-ltp-input').onchange = (e) => uploadLtpCsv(e, container);
-    container.querySelector('#dash-backup-btn').onclick = () => downloadBackup();
-    container.querySelector('#dash-restore-input').onchange = (e) => restoreBackup(e, container);
+  function metrics() {
+    const trades = PmsState.readTrades(); const long = PmsState.readLongterm();
+    const invested = [...trades, ...long].reduce((s,r)=>s+Number(r.wacc||0)*Number(r.qty||0),0);
+    const totalValue = [...trades, ...long].reduce((s,r)=>s+Number(r.ltp||0)*Number(r.qty||0),0);
+    const totalProfit = totalValue - invested;
+    const cash = PmsCapital.readCash();
+    const daily = todayVsYesterday();
+    const ledger = PmsCapital.readLedger().slice().sort((a,b)=>new Date(a.createdAt)-new Date(b.createdAt));
+    let run = 0; const cashSeries=[0]; ledger.forEach(e=>{ run += Number(e.delta||0); cashSeries.push(run);});
+    const roiSeries = [invested>0? totalProfit/invested*100:0, ...PmsState.readExited().slice(-6).map(e=>Number(e.profit||0))];
+    return { invested,totalValue,totalProfit,cash,daily,cashSeries,roiSeries, roiNow: invested>0?totalProfit/invested*100:0,
+      alloc:[trades.reduce((s,r)=>s+r.ltp*r.qty,0), long.reduce((s,r)=>s+r.ltp*r.qty,0), Math.max(cash,0)] };
   }
 
-  function refresh(container) {
-    if (!container) return;
-    renderTopStats(container);
-    renderPieChart(container);
-    renderProfitChart(container);
-    renderBreakdown(container);
+  function kpiHtml(m) {
+    return [
+      TerminalUI.kpiCard({label:'Total Value', value:PmsUI.currencyRound(m.totalValue), trend:[m.invested,m.totalValue], tone:m.totalProfit>=0?'profit':'loss'}),
+      TerminalUI.kpiCard({label:'Total Invested', value:PmsUI.currencyRound(m.invested), trend:[m.invested*0.7,m.invested]}),
+      TerminalUI.kpiCard({label:'Total Profit', value:PmsUI.currencyRound(m.totalProfit), trend:m.roiSeries, tone:m.totalProfit>=0?'profit':'loss'}),
+      TerminalUI.kpiCard({label:'Cash Balance', value:PmsUI.currencyRound(m.cash), trend:m.cashSeries, tone:m.cash>=0?'profit':'loss'}),
+      TerminalUI.kpiCard({label:'Daily P/L', value:PmsUI.currencyRound(m.daily), trend:[...m.roiSeries.slice(-4),m.daily], tone:m.daily>=0?'profit':'loss'})
+    ].join('');
   }
 
-  function renderTopStats(container) {
-    const trades   = PmsState.readTrades();
-    const longterm = PmsState.readLongterm();
-    const sipCost  = computeSipCost();
-    const sipValue = computeSipValue();
-
-    const investedTrades = trades.reduce((s, r) => s + (Number(r.wacc || 0) * Number(r.qty || 0)), 0);
-    const investedLong   = longterm.reduce((s, r) => s + (Number(r.wacc || 0) * Number(r.qty || 0)), 0);
-    const totalInvested  = investedTrades + investedLong + sipCost;
-
-    const valueTrades = trades.reduce((s, r) => s + (Number(r.ltp || 0) * Number(r.qty || 0)), 0);
-    const valueLong   = longterm.reduce((s, r) => s + (Number(r.ltp || 0) * Number(r.qty || 0)), 0);
-    const totalValue  = valueTrades + valueLong + sipValue;
-    const booked      = Number(PmsCapital.readProfitCashedOut() || 0);
-
-    const plNow = totalValue - totalInvested;
-    const el = container.querySelector('#dash-kpis');
-    if (!el) return;
-    el.innerHTML = [
-      { label: 'Total Invested', value: PmsUI.currencyRound(totalInvested), cls: '' },
-      { label: 'Total Value', value: PmsUI.currencyRound(totalValue), cls: PmsUI.plClass(plNow) },
-      { label: 'Profit Booked', value: PmsUI.currencyRound(booked), cls: booked > 0 ? 'val-amber' : '' },
-    ].map((k) => `
-      <div class="dash-kpi-card">
-        <div class="dash-kpi-label">${k.label}</div>
-        <div class="dash-kpi-value ${k.cls}">${k.value}</div>
-      </div>
-    `).join('');
+  function charts(container,m){ if(!window.Chart) return; allocChart?.destroy(); profitChart?.destroy(); cashChart?.destroy();
+    allocChart = new Chart(container.querySelector('#d-alloc'), {type:'doughnut', data:{labels:['Active','Long-term','Cash'], datasets:[{data:m.alloc, backgroundColor:['#38bdf8','#22c55e','#a78bfa']}]}, options:{animation:false,responsive:true,maintainAspectRatio:false}});
+    profitChart = new Chart(container.querySelector('#d-profit'), {type:'line', data:{labels:m.roiSeries.map((_,i)=>i+1), datasets:[{label:'Profit', data:m.roiSeries, borderColor:'#34d399', fill:true, backgroundColor:'rgba(52,211,153,0.12)'}]}, options:{animation:false,responsive:true,maintainAspectRatio:false}});
+    cashChart = new Chart(container.querySelector('#d-cash'), {type:'line', data:{labels:m.cashSeries.map((_,i)=>`E${i}`), datasets:[{label:'Cash', data:m.cashSeries, borderColor:'#a78bfa'}]}, options:{animation:false,responsive:true,maintainAspectRatio:false}});
   }
 
-  function renderPieChart(container) {
-    const trades   = PmsState.readTrades();
-    const longterm = PmsState.readLongterm();
-    const sip      = computeSipValue();
-
-    const tradeV = trades.reduce((s,r) => s + r.ltp * r.qty, 0);
-    const ltV    = longterm.reduce((s,r) => s + r.ltp * r.qty, 0);
-    const total  = tradeV + ltV + sip;
-
-    const segments = [
-      { label: 'Active Trades', value: tradeV,  color: '#3b82f6' },
-      { label: 'Long Term',     value: ltV,     color: '#22c55e' },
-      { label: 'Mutual Funds',  value: sip,     color: '#f59e0b' },
-    ].filter(s => s.value > 0);
-
-    if (pieChart) { pieChart.destroy(); pieChart = null; }
-    const canvas = container.querySelector('#dash-pie-chart');
-    if (!canvas || !segments.length) return;
-
-    if (window.Chart) {
-      pieChart = new Chart(canvas, {
-        type: 'doughnut',
-        data: {
-          labels: segments.map(s => s.label),
-          datasets: [{
-            data: segments.map(s => s.value),
-            backgroundColor: segments.map(s => s.color),
-            borderColor: 'rgba(0,0,0,0)',
-            borderWidth: 2,
-            hoverOffset: 6,
-          }],
-        },
-        options: {
-          animation: false,
-          responsive: false,
-          cutout: '68%',
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              callbacks: {
-                label: (ctx) => `${ctx.label}: ${PmsUI.currency(ctx.parsed)}`,
-              },
-            },
-          },
-        },
-      });
-    }
-
-    // Legend
-    const legend = container.querySelector('#dash-pie-legend');
-    legend.innerHTML = segments.map(s => {
-      const pct = total > 0 ? (s.value / total * 100).toFixed(1) : '0.0';
-      return `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="width:8px;height:8px;border-radius:50%;background:${s.color};display:inline-block;"></span>
-            <span style="font-size:12px;color:var(--text-secondary);">${s.label}</span>
-          </div>
-          <div style="font-family:var(--font-mono);font-size:12px;color:var(--text-primary);">${PmsUI.currency(s.value)} <span style="color:var(--text-muted);">${pct}%</span></div>
-        </div>
-      `;
-    }).join('');
+  function recentActivity() {
+    return PmsCapital.readLedger().slice(-5).reverse().map(r=>`${new Date(r.createdAt||Date.now()).toLocaleDateString()} · ${r.note||r.entryCategory||'entry'} · ${PmsUI.currencyRound(r.delta)}`).join('<br>') || 'No recent activity.';
   }
 
-  function renderProfitChart(container) {
-    const exited = PmsState.readExited();
-    const profitLedger = PmsCapital.readLedger()
-      .filter(r => r.entryCategory === 'profit')
-      .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
-
-    if (pastTradeChart) { pastTradeChart.destroy(); pastTradeChart = null; }
-    if (bookedProfitChart) { bookedProfitChart.destroy(); bookedProfitChart = null; }
-    if (!window.Chart) return;
-
-    const pastCanvas = container.querySelector('#dash-profit-past-chart');
-    const bookedCanvas = container.querySelector('#dash-profit-booked-chart');
-    if (!pastCanvas || !bookedCanvas) return;
-
-    const pastEvents = exited
-      .map((r, i) => ({
-        t: new Date(r.exitedAt || r.createdAt || 0).getTime() || (i + 1),
-        label: r.name || r.script || `Trade ${i + 1}`,
-        value: Number(r.profit || 0),
-      }))
-      .sort((a, b) => a.t - b.t);
-
-    const bookedEvents = profitLedger.map((r, i) => ({
-      t: new Date(r.createdAt || 0).getTime() || (Date.now() + i),
-      label: r.note || `Booked ${i + 1}`,
-      value: Number(r.baseAmount || Math.abs(Number(r.delta || 0))),
-    }));
-
-    const pastSeries = buildCumulativeSeries(pastEvents);
-    const bookedSeries = buildCumulativeSeries(bookedEvents);
-
-    pastTradeChart = buildMiniProfitChart(pastCanvas, {
-      label: 'Past Trade Curve',
-      color: '#3b82f6',
-      fill: true,
-      series: pastSeries,
-    });
-
-    bookedProfitChart = buildMiniProfitChart(bookedCanvas, {
-      label: 'Profit Booked',
-      color: '#f59e0b',
-      fill: false,
-      series: bookedSeries,
-    });
+  function todayVsYesterday() {
+    const h = PmsUI.readDailyPLHistory().slice().sort((a,b)=>new Date(a.capturedAt)-new Date(b.capturedAt));
+    if (h.length < 2) return 0;
+    return Number(h[h.length-1].total||0) - Number(h[h.length-2].total||0);
   }
 
-  function buildCumulativeSeries(events) {
-    let cumulative = 0;
-    const points = [{ y: 0, meta: 'Start' }];
-    events.forEach((ev) => {
-      cumulative += Number(ev.value || 0);
-      points.push({ y: PmsUI.round2(cumulative), meta: ev.label });
-    });
-    return points;
-  }
-
-  function buildMiniProfitChart(canvas, { label, color, fill, series }) {
-    return new Chart(canvas, {
-      type: 'line',
-      data: {
-        labels: series.map((_, idx) => idx),
-        datasets: [{
-          label,
-          data: series.map(p => p.y),
-          borderColor: color,
-          borderWidth: 2,
-          fill,
-          backgroundColor: fill ? `${color}30` : 'rgba(0,0,0,0)',
-          tension: 0.32,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-        }],
-      },
-      options: {
-        animation: false,
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              title: (items) => series[items?.[0]?.dataIndex || 0]?.meta || label,
-              label: (ctx) => `${label}: ${PmsUI.currency(ctx.parsed.y)}`,
-            },
-          },
-        },
-        scales: {
-          x: { display: false, grid: { display: false }, border: { display: false } },
-          y: {
-            ticks: { color: '#7f8aa3', callback: v => PmsUI.currencyRound(v), font: { size: 10 } },
-            grid: { color: 'rgba(255,255,255,0.045)' },
-            border: { display: false },
-          },
-        },
-      },
-    });
-  }
-
-  function renderBreakdown(container) {
-    const trades    = PmsState.readTrades();
-    const longterm  = PmsState.readLongterm();
-    const sipCost   = computeSipCost();
-    const sipValue  = computeSipValue();
-
-    const groups = [
-      { name: 'Active Trades', cost: trades.reduce((s,r)=>s+r.wacc*r.qty,0), value: trades.reduce((s,r)=>s+r.ltp*r.qty,0), count: trades.length },
-      { name: 'Long Term',     cost: longterm.reduce((s,r)=>s+r.wacc*r.qty,0), value: longterm.reduce((s,r)=>s+r.ltp*r.qty,0), count: longterm.length },
-      { name: 'Mutual Funds',  cost: sipCost, value: sipValue, count: computeSipCount() },
-    ];
-
-    const el = container.querySelector('#dash-breakdown');
-    el.innerHTML = `
-      <table class="pms-table" style="width:100%;">
-        <thead><tr>
-          <th>Category</th><th>Positions</th><th>Invested</th><th>Current Value</th><th>P&amp;L</th><th>ROI</th>
-        </tr></thead>
-        <tbody>
-          ${groups.map(g => {
-            const pl  = g.value - g.cost;
-            const roi = g.cost > 0 ? (pl / g.cost * 100) : 0;
-            return `<tr>
-              <td>${g.name}</td>
-              <td style="color:var(--text-secondary);">${g.count}</td>
-              <td>${PmsUI.currency(g.cost)}</td>
-              <td>${PmsUI.currency(g.value)}</td>
-              <td class="${PmsUI.plClass(pl)}">${PmsUI.currency(pl)}</td>
-              <td class="${PmsUI.plClass(roi)}">${PmsUI.pct(roi)}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    `;
-  }
-
-  function downloadBackup() {
-    const snap  = PmsState.createSnapshot();
-    const json  = JSON.stringify(snap, null, 2);
-    const blob  = new Blob([json], { type: 'application/json' });
-    const url   = URL.createObjectURL(blob);
-    const a     = document.createElement('a');
-    a.href = url;
-    a.download = `NEPSE_Backup_${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    PmsUI.toast('Backup downloaded ✓', 'success');
-  }
-
-  async function restoreBackup(e, container) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      PmsState.restoreSnapshot(data);
-      PmsUI.toast('Portfolio restored ✓', 'success');
-      refresh(container);
-    } catch {
-      PmsUI.toast('Invalid backup file', 'error');
-    }
-    e.target.value = '';
-  }
-
-  async function uploadLtpCsv(e, container) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const { updates, parsed, errors } = PmsUI.parseLtpCsv(await file.text());
-      if (!parsed) { PmsUI.toast('No valid CSV rows found', 'error'); return; }
-      const updated = PmsUI.applyLtpUpdates(updates);
-      PmsUI.toast(`LTP updated: ${updated} positions`, 'success');
-      container.querySelector('#dash-backup-status').textContent =
-        `LTP update from ${file.name} → Parsed ${parsed}, Updated ${updated}${errors ? `, Errors ${errors}` : ''}`;
-      refresh(container);
-    } catch {
-      PmsUI.toast('Unable to parse CSV file', 'error');
-    }
-    e.target.value = '';
-  }
-
-  // ── SIP helpers ───────────────────────────────────────────
-  function computeSipValue() {
-    const sip = PmsState.readSip();
-    return sip.sips.reduce((sum, name) => {
-      const rows = sip.records[name] || [];
-      const nav  = Number(sip.currentNav[name] || 0);
-      const units = rows.reduce((s,r) => s + Number(r.units || 0), 0);
-      return sum + units * nav;
-    }, 0);
-  }
-  function computeSipCost() {
-    const sip = PmsState.readSip();
-    return sip.sips.reduce((sum, name) => {
-      return sum + (sip.records[name] || []).reduce((s,r) => s + Number(r.amount || 0), 0);
-    }, 0);
-  }
-  function computeSipCount() {
-    return PmsState.readSip().sips.length;
-  }
-
-  return { render, refresh };
+  return { render, refresh: render };
 })();

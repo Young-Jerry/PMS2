@@ -13,7 +13,7 @@ const TradesView = (() => {
         <div class="view-header">
           <div>
             <div class="view-title">Trade History</div>
-            <div class="view-subtitle">All closed positions with full P&L breakdown</div>
+            <div class="view-subtitle">Closed positions with visual P&L tags and micro-curves</div>
           </div>
         </div>
 
@@ -82,7 +82,7 @@ const TradesView = (() => {
                   <th data-sort="buyTotal">Invested</th>
                   <th data-sort="soldTotal">Sell Total</th>
                   <th data-sort="totalTaxPaid" style="color:var(--loss);">Total Fees+Tax</th>
-                  <th data-sort="profit">Net Profit</th>
+                  <th data-sort="profit">Net Profit</th><th>Curve</th>
                   <th data-sort="moneyReceivable">Net Receivable</th>
                   <th data-sort="holdingDays">Days</th>
                   <th>Actions</th>
@@ -244,7 +244,7 @@ const TradesView = (() => {
     tbody.innerHTML = '';
 
     if (!filtered.length) {
-      tbody.innerHTML = `<tr><td colspan="12" style="padding:32px;text-align:center;color:var(--text-muted);">No exited trades yet.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="13" style="padding:32px;text-align:center;color:var(--text-muted);">No exited trades yet.</td></tr>`;
       return;
     }
 
@@ -259,7 +259,7 @@ const TradesView = (() => {
         <td>${PmsUI.currency(row.buyTotal)}</td>
         <td>${PmsUI.currency(row.soldTotal)}</td>
         <td class="val-loss">${PmsUI.currency(row.totalTaxPaid)}</td>
-        <td class="${PmsUI.plClass(row.profit)}" style="font-weight:600;">${PmsUI.currency(row.profit)}</td>
+        <td><span class="badge ${row.profit>=0?'badge-green':'badge-red'}">${row.profit>=0?'PROFIT':'LOSS'}</span> <span class="${PmsUI.plClass(row.profit)}" style="font-weight:600;">${PmsUI.currency(row.profit)}</span></td><td>${PmsUI.sparkline([row.buyTotal,row.soldTotal,row.moneyReceivable||row.soldTotal],70,22,row.profit>=0?'#34d399':'#f87171')}</td>
         <td class="${PmsUI.plClass(row.moneyReceivable)}">${PmsUI.currency(row.moneyReceivable)}</td>
         <td style="color:var(--text-muted);">${row.holdingDays}d</td>
         <td class="actions-cell">

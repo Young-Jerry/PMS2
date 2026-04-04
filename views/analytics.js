@@ -35,7 +35,7 @@ const AnalyticsView = (() => {
         <div class="view-header">
           <div>
             <div class="view-title">Analytics</div>
-            <div class="view-subtitle">Performance analysis, risk metrics &amp; behavioral insights</div>
+            <div class="view-subtitle">Performance analysis, ROI trend &amp; profit distribution insights</div>
           </div>
         </div>
 
@@ -78,7 +78,7 @@ const AnalyticsView = (() => {
             </div>
           </div>
 
-          <!-- Risk / Behavior Insights -->
+          <!-- Performance Insights -->
           <div class="pms-card">
             <div class="pms-card-header"><span class="pms-card-title">Performance Insights</span></div>
             <div class="pms-card-body" id="analytics-insights"></div>

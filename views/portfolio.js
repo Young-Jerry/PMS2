@@ -22,7 +22,7 @@ const PortfolioView = (() => {
         <div class="view-header">
           <div>
             <div class="view-title">Portfolio</div>
-            <div class="view-subtitle">Manage positions, WACC and sell targets</div>
+            <div class="view-subtitle">Visual-first position management with WACC and allocation insights</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <span class="save-indicator" id="port-save-ind"></span>
@@ -69,6 +69,8 @@ const PortfolioView = (() => {
             </form>
           </div>
         </div>
+
+        <div class="dash-kpi-strip" id="port-kpi-visual"></div>
 
         <!-- Positions Table -->
         <div class="table-section section-gap" id="port-table-section">
@@ -155,6 +157,8 @@ const PortfolioView = (() => {
       { key: 'current', label: 'Current Val' },
       { key: 'pl', label: 'P&L' },
       { key: 'plpct', label: 'ROI%' },
+      { key: 'roiMini', label: 'ROI Trend' },
+      { key: 'alloc', label: 'Allocation' },
       { key: 'actions', label: '' },
     ];
     thead.innerHTML = `<tr>${cols.map(c => {
@@ -221,6 +225,9 @@ const PortfolioView = (() => {
       tr.appendChild(PmsUI.td(PmsUI.currency(pl), PmsUI.plClass(pl)));
       // ROI%
       tr.appendChild(PmsUI.td(PmsUI.pct(plPct), PmsUI.plClass(plPct)));
+      tr.appendChild(PmsUI.tdHTML(PmsUI.sparkline([row.wacc,row.ltp,row.sell1||row.ltp],70,22,plPct>=0?'#34d399':'#f87171')));
+      const allocPct = totalCurrent(filtered) > 0 ? (current/totalCurrent(filtered))*100 : 0;
+      tr.appendChild(PmsUI.tdHTML(TerminalUI.allocationBar(allocPct)));
       // Actions
       const actTd = document.createElement('td');
       actTd.className = 'actions-cell';
@@ -232,6 +239,7 @@ const PortfolioView = (() => {
     });
 
     renderSummary(container, filtered);
+    renderVisualKpis(container, filtered);
   }
 
   function renderSummary(container, rows) {
@@ -734,5 +742,20 @@ const PortfolioView = (() => {
     };
   }
 
+
+  function totalCurrent(rows){ return rows.reduce((s,r)=>s + (Number(r.ltp||0)*Number(r.qty||0)),0); }
+
+  function renderVisualKpis(container, rows) {
+    const invested = rows.reduce((s,r)=>s + Number(r.wacc||0)*Number(r.qty||0), 0);
+    const current  = rows.reduce((s,r)=>s + Number(r.ltp||0)*Number(r.qty||0), 0);
+    const roi = invested>0 ? ((current-invested)/invested*100) : 0;
+    const root = container.querySelector('#port-kpi-visual');
+    if (!root) return;
+    root.innerHTML = [
+      TerminalUI.kpiCard({label:'Positions', value:String(rows.length), trend:[0, rows.length]}),
+      TerminalUI.kpiCard({label:'Current Value', value:PmsUI.currencyRound(current), trend:[invested,current], tone:current>=invested?'profit':'loss'}),
+      TerminalUI.kpiCard({label:'ROI', value:PmsUI.pct(roi), trend:[roi*0.5,roi], tone:roi>=0?'profit':'loss'})
+    ].join('');
+  }
   return { render };
 })();
