@@ -105,6 +105,15 @@ body {
   position: relative;
 }
 
+
+#pms-app.sidebar-collapsed #pms-sidebar {
+  width: 0;
+  border-right: 0;
+  transform: translateX(-100%);
+}
+#pms-app.sidebar-collapsed #pms-main {
+  width: 100%;
+}
 .sidebar-brand {
   padding: var(--space-lg) var(--space-md) var(--space-md);
   border-bottom: 1px solid var(--border);
@@ -253,7 +262,7 @@ body {
 .topbar-cash-pill:hover { border-color: var(--accent); color: var(--accent); }
 .topbar-cash-pill strong { color: var(--text-primary); }
 .sidebar-toggle-btn {
-  display: none;
+  display: inline-flex;
   border: 1px solid var(--border-bright);
   background: var(--bg-card);
   color: var(--text-primary);
@@ -262,7 +271,7 @@ body {
   cursor: pointer;
 }
 .sidebar-close-btn {
-  display: none;
+  display: inline-flex;
   position: absolute;
   top: 10px;
   right: 10px;
@@ -347,6 +356,29 @@ body {
   min-height: 280px;
   height: 100%;
   padding: 12px 16px 8px;
+}
+.dash-profit-stack {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 10px;
+  height: 280px;
+  padding: 10px 12px;
+}
+.dash-profit-mini {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 6px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.dash-profit-mini .chart-wrap { flex: 1; min-height: 0; }
+.dash-profit-mini-title {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
 }
 .stat-card {
   background: var(--bg-card);
@@ -840,10 +872,6 @@ body {
 @media (max-width: 960px) {
   .sidebar-toggle-btn {
     display: inline-flex;
-    position: fixed;
-    left: 10px;
-    top: 10px;
-    z-index: 25;
   }
   #pms-sidebar {
     position: fixed;

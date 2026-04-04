@@ -4,7 +4,6 @@
  * position sizing guidelines based on NEPSE portfolio data.
  */
 const RiskView = (() => {
-  let riskChart = null;
 
   function render(container) {
     container.innerHTML = `
@@ -16,21 +15,7 @@ const RiskView = (() => {
           </div>
         </div>
 
-        <!-- Risk KPIs -->
-        <div class="stat-grid risk-kpis-line" id="risk-kpis"></div>
-
-        <div class="grid-2 section-gap">
-          <!-- Concentration Chart -->
-          <div class="pms-card">
-            <div class="pms-card-header"><span class="pms-card-title">Position Concentration</span></div>
-            <div class="pms-card-body" style="padding:12px 16px;">
-              <div class="chart-wrap" style="height:200px;">
-                <canvas id="risk-conc-chart"></canvas>
-              </div>
-            </div>
-          </div>
-
-          <!-- Risk Score Panel -->
+        <div class="section-gap">
           <div class="pms-card">
             <div class="pms-card-header"><span class="pms-card-title">Risk Indicators</span></div>
             <div class="pms-card-body" id="risk-indicators"></div>
@@ -70,69 +55,11 @@ const RiskView = (() => {
     const totalCurrent  = allPos.reduce((s,r) => s + r.ltp  * r.qty, 0);
     const cash          = PmsCapital.readCash();
     const totalPortfolio = totalCurrent + cash;
-    const unrealizedPL  = totalCurrent - totalInvested;
 
-    renderKPIs(container, allPos, totalInvested, totalCurrent, totalPortfolio, cash);
-    renderConcentrationChart(container, allPos, totalCurrent);
     renderIndicators(container, allPos, totalInvested, totalCurrent, totalPortfolio, cash);
     renderPositionTable(container, allPos, totalCurrent);
   }
 
-  function renderKPIs(container, allPos, totalInvested, totalCurrent, totalPortfolio, cash) {
-    const unrealizedPL = totalCurrent - totalInvested;
-    const cashPct      = totalPortfolio > 0 ? (cash / totalPortfolio * 100) : 100;
-    const investedPct  = totalPortfolio > 0 ? (totalCurrent / totalPortfolio * 100) : 0;
-    const losses       = allPos.filter(r => r.ltp < r.wacc);
-
-    container.querySelector('#risk-kpis').innerHTML = [
-      { l: 'Total Invested',  v: PmsUI.currency(totalInvested),   c: '' },
-      { l: 'Cash Reserve',    v: `${cashPct.toFixed(1)}%`,        c: '' },
-      { l: 'Invested %',      v: `${investedPct.toFixed(1)}%`,     c: '' },
-      { l: 'Unrealized P&L',  v: PmsUI.currency(unrealizedPL),    c: unrealizedPL >= 0 ? 'profit-card' : 'loss-card' },
-      { l: 'Positions at Loss', v: String(losses.length),         c: '' },
-    ].map(k => `
-      <div class="stat-card ${k.c}">
-        <div class="stat-label">${k.l}</div>
-        <div class="stat-value">${k.v}</div>
-      </div>
-    `).join('');
-  }
-
-  function renderConcentrationChart(container, allPos, totalCurrent) {
-    if (riskChart) { riskChart.destroy(); riskChart = null; }
-    const canvas = container.querySelector('#risk-conc-chart');
-    if (!canvas || !allPos.length || !window.Chart) return;
-
-    const sorted = [...allPos]
-      .map(r => ({ label: r.script, value: r.ltp * r.qty }))
-      .sort((a,b) => b.value - a.value)
-      .slice(0, 10);
-
-    const pcts   = sorted.map(r => totalCurrent > 0 ? +(r.value / totalCurrent * 100).toFixed(1) : 0);
-    const colors = sorted.map((_, i) => {
-      const h = 200 + i * 22;
-      return `hsl(${h},70%,55%)`;
-    });
-
-    riskChart = new Chart(canvas, {
-      type: 'bar',
-      data: {
-        labels: sorted.map(r => r.label),
-        datasets: [{ data: pcts, backgroundColor: colors, borderRadius: 4, borderSkipped: false }],
-      },
-      options: {
-        animation: false, responsive: true, maintainAspectRatio: false, indexAxis: 'y',
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: ctx => `${ctx.parsed.x.toFixed(1)}% of portfolio` } },
-        },
-        scales: {
-          x: { ticks: { color: '#4a5568', font: {size:10}, callback: v => `${v}%` }, grid: { color: 'rgba(255,255,255,0.05)' }, border: { display: false } },
-          y: { ticks: { color: '#8892a4', font: {size:11} }, grid: { display: false }, border: { display: false } },
-        },
-      },
-    });
-  }
 
   function renderIndicators(container, allPos, totalInvested, totalCurrent, totalPortfolio, cash) {
     const cashPct     = totalPortfolio > 0 ? (cash / totalPortfolio * 100) : 100;

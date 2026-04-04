@@ -4,7 +4,8 @@
  */
 const DashboardView = (() => {
   let pieChart = null;
-  let profitChart = null;
+  let pastTradeChart = null;
+  let bookedProfitChart = null;
 
   function render(container) {
     container.innerHTML = `
@@ -47,11 +48,19 @@ const DashboardView = (() => {
           <div class="pms-card">
             <div class="pms-card-header">
               <span class="pms-card-title">Profit</span>
-              <span id="dash-trade-count" style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);"></span>
             </div>
-            <div class="pms-card-body" style="padding:0;">
-              <div class="chart-wrap dash-profit-wrap">
-                <canvas id="dash-profit-chart"></canvas>
+            <div class="pms-card-body dash-profit-stack">
+              <div class="dash-profit-mini">
+                <div class="dash-profit-mini-title">Past Trade Curve (Profit of now)</div>
+                <div class="chart-wrap">
+                  <canvas id="dash-profit-past-chart"></canvas>
+                </div>
+              </div>
+              <div class="dash-profit-mini">
+                <div class="dash-profit-mini-title">Profit Booked</div>
+                <div class="chart-wrap">
+                  <canvas id="dash-profit-booked-chart"></canvas>
+                </div>
               </div>
             </div>
           </div>
@@ -190,99 +199,83 @@ const DashboardView = (() => {
       .filter(r => r.entryCategory === 'profit')
       .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
 
-    const tradeCount = container.querySelector('#dash-trade-count');
-    if (tradeCount) tradeCount.textContent = `${exited.length} closed trades • ${profitLedger.length} profit booked entries`;
+    if (pastTradeChart) { pastTradeChart.destroy(); pastTradeChart = null; }
+    if (bookedProfitChart) { bookedProfitChart.destroy(); bookedProfitChart = null; }
+    if (!window.Chart) return;
 
-    if (profitChart) { profitChart.destroy(); profitChart = null; }
-    const canvas = container.querySelector('#dash-profit-chart');
-    if (!canvas || !window.Chart) return;
+    const pastCanvas = container.querySelector('#dash-profit-past-chart');
+    const bookedCanvas = container.querySelector('#dash-profit-booked-chart');
+    if (!pastCanvas || !bookedCanvas) return;
 
-    const events = [
-      ...exited.map((r, i) => ({
+    const pastEvents = exited
+      .map((r, i) => ({
         t: new Date(r.exitedAt || r.createdAt || 0).getTime() || (i + 1),
         label: r.name || r.script || `Trade ${i + 1}`,
-        realized: Number(r.profit || 0),
-        booked: 0,
-      })),
-      ...profitLedger.map((r, i) => ({
-        t: new Date(r.createdAt || 0).getTime() || (Date.now() + i),
-        label: r.note || `Booked ${i + 1}`,
-        realized: 0,
-        booked: Number(r.baseAmount || Math.abs(Number(r.delta || 0))),
-      })),
-    ].sort((a, b) => a.t - b.t);
+        value: Number(r.profit || 0),
+      }))
+      .sort((a, b) => a.t - b.t);
 
-    let cumulativeRealized = 0;
-    let cumulativeBooked = 0;
-    const profitPoints = [{ x: 0, y: 0, meta: 'Start' }];
-    const bookedPoints = [{ x: 0, y: 0, meta: 'Start' }];
-    events.forEach((ev, idx) => {
-      cumulativeRealized += ev.realized;
-      cumulativeBooked += ev.booked;
-      profitPoints.push({
-        x: idx + 1,
-        y: PmsUI.round2(cumulativeRealized),
-        meta: ev.label,
-      });
-      bookedPoints.push({
-        x: idx + 1,
-        y: PmsUI.round2(cumulativeBooked),
-        meta: ev.label,
-      });
+    const bookedEvents = profitLedger.map((r, i) => ({
+      t: new Date(r.createdAt || 0).getTime() || (Date.now() + i),
+      label: r.note || `Booked ${i + 1}`,
+      value: Number(r.baseAmount || Math.abs(Number(r.delta || 0))),
+    }));
+
+    const pastSeries = buildCumulativeSeries(pastEvents);
+    const bookedSeries = buildCumulativeSeries(bookedEvents);
+
+    pastTradeChart = buildMiniProfitChart(pastCanvas, {
+      label: 'Past Trade Curve',
+      color: '#3b82f6',
+      fill: true,
+      series: pastSeries,
     });
-    const labels = profitPoints.map((_, idx) => idx);
 
-    profitChart = new Chart(canvas, {
+    bookedProfitChart = buildMiniProfitChart(bookedCanvas, {
+      label: 'Profit Booked',
+      color: '#f59e0b',
+      fill: false,
+      series: bookedSeries,
+    });
+  }
+
+  function buildCumulativeSeries(events) {
+    let cumulative = 0;
+    const points = [{ y: 0, meta: 'Start' }];
+    events.forEach((ev) => {
+      cumulative += Number(ev.value || 0);
+      points.push({ y: PmsUI.round2(cumulative), meta: ev.label });
+    });
+    return points;
+  }
+
+  function buildMiniProfitChart(canvas, { label, color, fill, series }) {
+    return new Chart(canvas, {
       type: 'line',
       data: {
-        labels,
-        datasets: [
-          {
-            label: 'Profit',
-            data: profitPoints.map(p => p.y),
-            borderColor: '#3b82f6',
-            borderWidth: 2.5,
-            fill: true,
-            backgroundColor: (ctx) => {
-              const chart = ctx.chart;
-              const { ctx: c, chartArea } = chart;
-              if (!chartArea) return 'rgba(59,130,246,0.12)';
-              const gradient = c.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-              gradient.addColorStop(0, 'rgba(59,130,246,0.28)');
-              gradient.addColorStop(1, 'rgba(59,130,246,0.03)');
-              return gradient;
-            },
-            tension: 0.35,
-            pointRadius: 0,
-            pointHoverRadius: 5,
-            pointHoverBackgroundColor: '#60a5fa',
-          },
-          {
-            label: 'Profit Booked',
-            data: bookedPoints.map(p => p.y),
-            borderColor: '#f59e0b',
-            borderWidth: 2.25,
-            fill: false,
-            tension: 0.35,
-            pointRadius: 0,
-            pointHoverRadius: 5,
-            pointHoverBackgroundColor: '#fbbf24',
-          },
-        ],
+        labels: series.map((_, idx) => idx),
+        datasets: [{
+          label,
+          data: series.map(p => p.y),
+          borderColor: color,
+          borderWidth: 2,
+          fill,
+          backgroundColor: fill ? `${color}30` : 'rgba(0,0,0,0)',
+          tension: 0.32,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+        }],
       },
       options: {
-        animation: false, responsive: true, maintainAspectRatio: false,
-        interaction: { mode: 'nearest', intersect: false },
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
         plugins: {
-          legend: {
-            display: true,
-            position: 'top',
-            labels: { color: '#9ba6bf', boxWidth: 16, usePointStyle: true, pointStyle: 'line' },
-          },
+          legend: { display: false },
           tooltip: {
             callbacks: {
-              title: (items) => profitPoints[items?.[0]?.dataIndex || 0]?.meta || 'Profit',
-              label: (ctx) => `${ctx.dataset.label}: ${PmsUI.currency(ctx.parsed.y)}`,
+              title: (items) => series[items?.[0]?.dataIndex || 0]?.meta || label,
+              label: (ctx) => `${label}: ${PmsUI.currency(ctx.parsed.y)}`,
             },
           },
         },

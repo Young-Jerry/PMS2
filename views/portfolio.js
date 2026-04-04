@@ -282,28 +282,9 @@ const PortfolioView = (() => {
       }
       if (newVal === row[field]) return;
 
-      const previousCost = investedCost(row.wacc, row.qty);
-      const previousValue = row[field];
       row[field] = newVal;
       if (field === 'sell1') row.sell2 = newVal * 1.1;
-      const newCost = investedCost(row.wacc, row.qty);
-      if (window.PmsCapital) {
-        const cashBefore = PmsCapital.readCash();
-        const cashAfter = PmsCapital.adjustCash(previousCost - newCost, {
-          note: `Position edit · ${row.script} ${String(field).toUpperCase()}`,
-          type: 'position_edit',
-          kind: 'manual',
-          entryCategory: 'transaction',
-          editable: true,
-        });
-        if (cashAfter === cashBefore && previousCost !== newCost) {
-          row[field] = previousValue;
-          if (field === 'sell1') row.sell2 = Number(previousValue || 0) * 1.1;
-          renderRows(document.getElementById('pms-view'));
-          return;
-        }
-      }
-      persist(storageKey);
+      persistRow(storageKey, row);
       renderRows(document.getElementById('pms-view'));
     };
 
@@ -483,7 +464,6 @@ const PortfolioView = (() => {
     });
     card.querySelector('[data-cancel]').onclick = close;
     card.querySelector('[data-save]').onclick = () => {
-      const costBefore = rows.reduce((s,r) => s + investedCost(r.wacc, r.qty), 0);
       card.querySelectorAll('input[data-id]').forEach(inp => {
         const row = rows.find(r => r.id === inp.dataset.id);
         if (!row) return;
@@ -494,8 +474,6 @@ const PortfolioView = (() => {
         else if (k === 'wacc')  row.wacc  = Math.max(0, PmsUI.num(inp.value) || 0);
         else if (k === 'sell1') { row.sell1 = Math.max(0, PmsUI.num(inp.value) || 0); row.sell2 = row.sell1 * 1.1; }
       });
-      const costAfter = rows.reduce((s,r) => s + investedCost(r.wacc, r.qty), 0);
-      PmsCapital.adjustCash(costBefore - costAfter);
       saveRows(cfg.key, rows);
       persist(cfg.key);
       PmsUI.toast('Mass edit saved ✓', 'success');
@@ -706,10 +684,18 @@ const PortfolioView = (() => {
   }
   function saveRows(key, rows) { localStorage.setItem(key, JSON.stringify(rows)); }
   function persist(key) {
-    saveRows(key, getRows(key));
     flashSave();
     PmsCapital.updateWidgets();
     window.dispatchEvent(new CustomEvent('pms-portfolio-updated'));
+  }
+
+  function persistRow(key, updatedRow) {
+    const rows = getRows(key);
+    const idx = rows.findIndex(r => r.id === updatedRow.id);
+    if (idx < 0) return;
+    rows[idx] = { ...rows[idx], ...updatedRow };
+    saveRows(key, rows);
+    persist(key);
   }
   function flashSave() {
     const ind = document.getElementById('port-save-ind');
